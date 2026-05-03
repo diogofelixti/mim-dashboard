@@ -15,5 +15,5 @@ License
 MIT
 
 <p align="center">
-  <strong>Going to zero since 2009</strong> 🧙‍♂️
+  <img src="./assets/mim-wizard.webp" alt="Magic Internet Money Wizard" width="400"/>
 </p>
