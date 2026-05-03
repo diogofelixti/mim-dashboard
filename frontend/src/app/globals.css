@@ -1,0 +1,77 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-mim-bg text-mim-text antialiased;
+    font-family: 'Geist', 'Inter', system-ui, sans-serif;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #12121A;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2A2A3A;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3A3A4A;
+  }
+}
+
+@layer components {
+  .glow-orange {
+    box-shadow: 0 0 20px rgba(247, 147, 26, 0.25), 0 0 40px rgba(247, 147, 26, 0.1);
+  }
+
+  .glow-orange-sm {
+    box-shadow: 0 0 8px rgba(247, 147, 26, 0.3);
+  }
+
+  .text-hash {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8125rem;
+    letter-spacing: 0.01em;
+    @apply text-mim-text-muted;
+  }
+
+  .card {
+    @apply bg-mim-surface border border-mim-border rounded-xl p-4;
+  }
+
+  .card-2 {
+    @apply bg-mim-surface-2 border border-mim-border rounded-lg p-3;
+  }
+}
+
+@layer utilities {
+  .animate-pulse-live {
+    animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+}
