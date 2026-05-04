@@ -1,14 +1,23 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { login } from '@/lib/api';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 export default function LoginPage() {
   const router = useRouter();
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/setup/status`)
+      .then((r) => r.json())
+      .then(({ completed }) => { if (!completed) router.replace('/setup'); })
+      .catch(() => {});
+  }, [router]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
