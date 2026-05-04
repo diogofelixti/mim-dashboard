@@ -1,6 +1,3 @@
-<p align="center">
-  <img src="./assets/mim-wizard.webp" alt="Magic Internet Money Wizard" width="400"/>
-</p>
 <h1 align="center">MIM-Dashboard</h1>
 <h3 align="center">Magic Internet Money Dashboard</h3>
 <p align="center">
