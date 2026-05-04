@@ -1,6 +1,30 @@
+import fs from 'fs/promises';
 import config from '../config.js';
 
 let _id = 0;
+
+const COOKIE_PATHS = {
+  mainnet: '/bitcoin-data/.cookie',
+  signet:  '/bitcoin-data/signet/.cookie',
+  testnet: '/bitcoin-data/testnet3/.cookie',
+};
+
+// Reads the .cookie file on every call when auth_type is 'cookie'.
+// This ensures we always use the current credentials even after bitcoind restarts.
+async function getAuth() {
+  if (config.btc.authType === 'cookie') {
+    const cookiePath = COOKIE_PATHS[config.btc.network] ?? COOKIE_PATHS.mainnet;
+    try {
+      const raw = await fs.readFile(cookiePath, 'utf8');
+      const t = raw.trim();
+      const i = t.indexOf(':');
+      if (i !== -1) {
+        return 'Basic ' + Buffer.from(t).toString('base64');
+      }
+    } catch { /* fall through */ }
+  }
+  return config.btc.rpcAuth;
+}
 
 async function rpcCall(method, params = [], wallet = null) {
   const base = config.btc.rpcUrl;
@@ -10,14 +34,9 @@ async function rpcCall(method, params = [], wallet = null) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: config.btc.rpcAuth,
+      Authorization: await getAuth(),
     },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: ++_id,
-      method,
-      params,
-    }),
+    body: JSON.stringify({ jsonrpc: '2.0', id: ++_id, method, params }),
   });
 
   if (!res.ok) {
@@ -26,7 +45,6 @@ async function rpcCall(method, params = [], wallet = null) {
   }
 
   const json = await res.json();
-
   if (json.error) {
     const err = new Error(json.error.message ?? 'RPC error');
     err.code = json.error.code;

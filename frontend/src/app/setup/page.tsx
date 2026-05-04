@@ -7,7 +7,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 const STEPS = [
   { id: 1, label: 'Welcome' },
-  { id: 2, label: 'Config' },
+  { id: 2, label: 'Detect' },
   { id: 3, label: 'RPC' },
   { id: 4, label: 'ZMQ' },
   { id: 5, label: 'Password' },
@@ -20,42 +20,48 @@ const NETWORK_PORTS: Record<string, string> = {
   testnet: '18332',
 };
 
-function cookiePath(network: string) {
-  if (network === 'mainnet') return '/bitcoin-data/.cookie';
-  if (network === 'testnet') return '/bitcoin-data/testnet3/.cookie';
-  return `/bitcoin-data/${network}/.cookie`;
-}
+type Network   = 'mainnet' | 'signet' | 'testnet';
+type AuthMode  = 'userpass' | 'cookie';
 
-function parseCookie(raw: string): { user: string; pass: string } | null {
-  const t = raw.trim();
-  const i = t.indexOf(':');
-  if (i === -1) return null;
-  return { user: t.slice(0, i), pass: t.slice(i + 1) };
+interface DetectResult {
+  found: boolean;
+  network: string;
+  bitcoinConf: {
+    parsed: Record<string, string>;
+    zmqDetected: boolean;
+  } | null;
+  cookie: { found: boolean; user?: string; path?: string };
+  suggestedConfig: {
+    rpc_host: string;
+    rpc_port: number;
+    rpc_user: string;
+    rpc_pass: string;
+    auth_type: string;
+    zmq_block_url: string;
+    zmq_tx_url: string;
+    zmq_raw_tx_url: string;
+    zmq_detected: boolean;
+  };
+  mountPath: string;
 }
-
-type Network  = 'mainnet' | 'signet' | 'testnet';
-type AuthMode = 'userpass' | 'cookie';
-type CookieMethod = 'paste' | 'volume';
 
 interface Form {
-  btcConfPath:   string;
-  btcNetwork:    Network;
-  rpcHost:       string;
-  rpcPort:       string;
-  authMode:      AuthMode;
-  cookieMethod:  CookieMethod;
-  cookiePaste:   string;
-  rpcUser:       string;
-  rpcPass:       string;
-  zmqBlockUrl:   string;
-  zmqTxUrl:      string;
-  zmqRawTxUrl:   string;
-  skipZmq:       boolean;
-  password:      string;
+  btcNetwork:      Network;
+  rpcHost:         string;
+  rpcPort:         string;
+  authMode:        AuthMode;
+  cookiePaste:     string;
+  rpcUser:         string;
+  rpcPass:         string;
+  zmqBlockUrl:     string;
+  zmqTxUrl:        string;
+  zmqRawTxUrl:     string;
+  skipZmq:         boolean;
+  password:        string;
   passwordConfirm: string;
 }
 
-// ── Shared UI components ─────────────────────────────────────────────────────
+// ── Shared UI ─────────────────────────────────────────────────────────────────
 
 function ProgressBar({ step }: { step: number }) {
   return (
@@ -99,22 +105,24 @@ function Card({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Field({ label, type = 'text', value, onChange, placeholder, hint, mono = true }: {
-  label: string; type?: string; value: string; onChange: (v: string) => void;
-  placeholder?: string; hint?: string; mono?: boolean;
+function Field({ label, type = 'text', value, onChange, placeholder, hint, readOnly }: {
+  label: string; type?: string; value: string; onChange?: (v: string) => void;
+  placeholder?: string; hint?: string; readOnly?: boolean;
 }) {
   return (
     <div>
       <label className="block text-xs text-mim-text-muted mb-1.5 uppercase tracking-widest">{label}</label>
       <input
-        type={type} value={value} onChange={(e) => onChange(e.target.value)}
+        type={type} value={value}
+        onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
+        readOnly={readOnly}
         className={[
-          'w-full px-4 py-2.5 rounded-lg text-sm',
+          'w-full px-4 py-2.5 rounded-lg font-mono text-sm',
           'bg-mim-bg border border-mim-border text-mim-text placeholder-mim-text-dim',
           'focus:outline-none focus:border-bitcoin-orange focus:ring-1 focus:ring-bitcoin-orange',
           'transition-colors duration-150',
-          mono ? 'font-mono' : '',
+          readOnly ? 'opacity-60 cursor-default' : '',
         ].join(' ')}
       />
       {hint && <p className="text-xs text-mim-text-dim mt-1">{hint}</p>}
@@ -123,17 +131,16 @@ function Field({ label, type = 'text', value, onChange, placeholder, hint, mono 
 }
 
 function PillGroup<T extends string>({ options, value, onChange, labels }: {
-  options: T[]; value: T; onChange: (v: T) => void; labels?: Record<T, string>;
+  options: T[]; value: T; onChange: (v: T) => void; labels?: Partial<Record<T, string>>;
 }) {
   return (
     <div className="flex rounded-lg overflow-hidden border border-mim-border">
       {options.map((o) => (
-        <button key={o} onClick={() => onChange(o)} className={[
-          'flex-1 py-2 text-xs font-mono capitalize transition-colors',
-          value === o
-            ? 'bg-bitcoin-orange/20 text-bitcoin-orange'
-            : 'bg-mim-bg text-mim-text-muted hover:text-mim-text',
-        ].join(' ')}>
+        <button key={o} onClick={() => onChange(o)}
+          className={[
+            'flex-1 py-2 text-xs font-mono capitalize transition-colors',
+            value === o ? 'bg-bitcoin-orange/20 text-bitcoin-orange' : 'bg-mim-bg text-mim-text-muted hover:text-mim-text',
+          ].join(' ')}>
           {labels?.[o] ?? o}
         </button>
       ))}
@@ -141,10 +148,9 @@ function PillGroup<T extends string>({ options, value, onChange, labels }: {
   );
 }
 
-function Btn({ onClick, disabled, loading, variant = 'primary', children, type = 'button' }: {
+function Btn({ onClick, disabled, loading, variant = 'primary', children }: {
   onClick?: () => void; disabled?: boolean; loading?: boolean;
   variant?: 'primary' | 'secondary' | 'ghost'; children: React.ReactNode;
-  type?: 'button' | 'submit';
 }) {
   const base = 'px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed';
   const styles = {
@@ -153,7 +159,7 @@ function Btn({ onClick, disabled, loading, variant = 'primary', children, type =
     ghost:     `${base} text-mim-text-muted hover:text-mim-text`,
   };
   return (
-    <button type={type} onClick={onClick} disabled={disabled || loading} className={styles[variant]}>
+    <button onClick={onClick} disabled={disabled || loading} className={styles[variant]}>
       {loading && (
         <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -165,52 +171,63 @@ function Btn({ onClick, disabled, loading, variant = 'primary', children, type =
   );
 }
 
-function Info({ children }: { children: React.ReactNode }) {
+function Badge({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   return (
-    <div className="px-4 py-3 rounded-lg bg-mim-bg border border-mim-border text-xs font-mono text-mim-text-muted leading-relaxed">
+    <div className={[
+      'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-mono border',
+      ok ? 'bg-green-950/40 border-green-900/50 text-green-400'
+         : 'bg-yellow-950/40 border-yellow-900/50 text-yellow-400',
+    ].join(' ')}>
+      <span>{ok ? '✓' : '⚠'}</span>
       {children}
     </div>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+function InfoBox({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-4 py-3 rounded-lg bg-mim-bg border border-mim-border text-xs font-mono text-mim-text-muted leading-relaxed space-y-1">
+      {children}
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SetupPage() {
   const router = useRouter();
-  const [step, setStep]   = useState(1);
-  const [busy, setBusy]   = useState(false);
-  const [err,  setErr]    = useState('');
-  const [rpcOk, setRpcOk] = useState<{ chain: string; blocks: number } | null>(null);
-  const [cookieReadOk, setCookieReadOk] = useState(false);
-  const [detected, setDetected]         = useState<string[]>([]);
-  const [detectHint, setDetectHint]     = useState('');
+  const [step, setStep]     = useState(1);
+  const [busy, setBusy]     = useState(false);
+  const [err,  setErr]      = useState('');
+  const [rpcOk, setRpcOk]   = useState<{ chain: string; blocks: number } | null>(null);
+  const [detectResult, setDetectResult] = useState<DetectResult | null>(null);
+  const [detectStatus, setDetectStatus] = useState<'idle' | 'found' | 'not_found' | 'error'>('idle');
 
   const [form, setForm] = useState<Form>({
-    btcConfPath:   '',
-    btcNetwork:    'mainnet',
-    rpcHost:       'host.docker.internal',
-    rpcPort:       '8332',
-    authMode:      'userpass',
-    cookieMethod:  'paste',
-    cookiePaste:   '',
-    rpcUser:       '',
-    rpcPass:       '',
-    zmqBlockUrl:   'tcp://host.docker.internal:28332',
-    zmqTxUrl:      'tcp://host.docker.internal:28333',
-    zmqRawTxUrl:   'tcp://host.docker.internal:28334',
-    skipZmq:       false,
-    password:      '',
+    btcNetwork:      'mainnet',
+    rpcHost:         'host.docker.internal',
+    rpcPort:         '8332',
+    authMode:        'userpass',
+    cookiePaste:     '',
+    rpcUser:         '',
+    rpcPass:         '',
+    zmqBlockUrl:     'tcp://host.docker.internal:28332',
+    zmqTxUrl:        'tcp://host.docker.internal:28333',
+    zmqRawTxUrl:     'tcp://host.docker.internal:28334',
+    skipZmq:         false,
+    password:        '',
     passwordConfirm: '',
   });
 
-  const patch = (updates: Partial<Form>) => setForm((f) => ({ ...f, ...updates }));
+  const patch = (u: Partial<Form>) => setForm((f) => ({ ...f, ...u }));
 
-  // Auto-parse pasted cookie content → rpcUser / rpcPass
+  // Auto-parse pasted cookie → rpcUser / rpcPass
   useEffect(() => {
-    if (form.authMode !== 'cookie' || form.cookieMethod !== 'paste') return;
-    const parsed = parseCookie(form.cookiePaste);
-    if (parsed) patch({ rpcUser: parsed.user, rpcPass: parsed.pass });
-  }, [form.cookiePaste, form.authMode, form.cookieMethod]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (form.authMode !== 'cookie' || !form.cookiePaste) return;
+    const t = form.cookiePaste.trim();
+    const i = t.indexOf(':');
+    if (i !== -1) patch({ rpcUser: t.slice(0, i), rpcPass: t.slice(i + 1) });
+  }, [form.cookiePaste]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Redirect if already set up
   useEffect(() => {
@@ -220,20 +237,37 @@ export default function SetupPage() {
       .catch(() => {});
   }, [router]);
 
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  function applyDetectResult(data: DetectResult) {
+    const s = data.suggestedConfig;
+    patch({
+      btcNetwork:  data.network as Network,
+      rpcHost:     s.rpc_host,
+      rpcPort:     String(s.rpc_port),
+      rpcUser:     s.rpc_user,
+      rpcPass:     s.rpc_pass,
+      authMode:    s.auth_type === 'cookie' ? 'cookie' : 'userpass',
+      zmqBlockUrl: s.zmq_block_url,
+      zmqTxUrl:    s.zmq_tx_url,
+      zmqRawTxUrl: s.zmq_raw_tx_url,
+    });
+  }
+
   // ── Actions ──────────────────────────────────────────────────────────────────
 
   async function detect() {
-    setBusy(true); setErr(''); setDetectHint('');
+    setBusy(true); setErr(''); setDetectStatus('idle'); setRpcOk(null);
     try {
-      const r = await fetch(`${API_BASE}/api/setup/detect`);
-      const data = await r.json();
-      if (!r.ok) { setErr(data.error ?? 'Detection failed'); return; }
-      const paths: string[] = Array.isArray(data.found) ? data.found : [];
-      setDetected(paths);
-      if (paths.length > 0) patch({ btcConfPath: paths[0] });
-      else setDetectHint(data.hint ?? 'No bitcoin.conf found in common container paths.');
+      const r = await fetch(`${API_BASE}/api/setup/detect?network=${form.btcNetwork}`);
+      const data: DetectResult = await r.json();
+      if (!r.ok) { setErr((data as { error?: string }).error ?? 'Detection failed'); setDetectStatus('error'); return; }
+      setDetectResult(data);
+      setDetectStatus(data.found ? 'found' : 'not_found');
+      if (data.found) applyDetectResult(data);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Detection failed');
+      setDetectStatus('error');
     } finally {
       setBusy(false);
     }
@@ -262,39 +296,24 @@ export default function SetupPage() {
     }
   }
 
-  async function readCookie() {
-    setBusy(true); setErr(''); setCookieReadOk(false);
-    try {
-      const r = await fetch(`${API_BASE}/api/setup/read-cookie?network=${form.btcNetwork}`);
-      const data = await r.json();
-      if (!r.ok) { setErr(data.error); return; }
-      patch({ rpcUser: data.rpcUser, rpcPass: data.rpcPass });
-      setCookieReadOk(true);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Failed to read cookie');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function save() {
     setBusy(true); setErr('');
     try {
       const body: Record<string, unknown> = {
-        rpcHost: form.rpcHost,
-        rpcPort: parseInt(form.rpcPort, 10),
-        rpcUser: form.rpcUser,
-        rpcPass: form.rpcPass,
-        authType: form.authMode,
+        rpcHost:    form.rpcHost,
+        rpcPort:    parseInt(form.rpcPort, 10),
+        rpcUser:    form.rpcUser,
+        rpcPass:    form.rpcPass,
+        authType:   form.authMode,
         btcNetwork: form.btcNetwork,
-        password: form.password,
+        password:   form.password,
       };
       if (!form.skipZmq) {
         body.zmqBlockUrl  = form.zmqBlockUrl;
         body.zmqTxUrl     = form.zmqTxUrl;
         body.zmqRawTxUrl  = form.zmqRawTxUrl;
       }
-      if (form.btcConfPath) body.btcConfPath = form.btcConfPath;
+      if (detectResult?.bitcoinConf) body.btcConfPath = '/bitcoin-data/bitcoin.conf';
 
       const r = await fetch(`${API_BASE}/api/setup/save`, {
         method: 'POST',
@@ -314,16 +333,13 @@ export default function SetupPage() {
   function next() { setErr(''); setStep((s) => s + 1); }
   function back() { setErr(''); setStep((s) => s - 1); }
 
-  function changeNetwork(n: Network) {
-    patch({ btcNetwork: n, rpcPort: NETWORK_PORTS[n] ?? '8332' });
-    setCookieReadOk(false);
-  }
-
-  const cookieTerminalCmd = form.btcNetwork === 'mainnet'
-    ? 'cat ~/.bitcoin/.cookie'
-    : `cat ~/.bitcoin/${form.btcNetwork}/.cookie`;
-
   const rpcReady = Boolean(form.rpcHost && form.rpcUser && form.rpcPass);
+  const confParsed = detectResult?.bitcoinConf?.parsed ?? {};
+  const zmqNotDetected = detectResult?.found && !detectResult?.bitcoinConf?.zmqDetected;
+
+  const zmqExampleConf = form.btcNetwork === 'mainnet'
+    ? `zmqpubhashblock=tcp://0.0.0.0:28332\nzmqpubhashtx=tcp://0.0.0.0:28333\nzmqpubrawtx=tcp://0.0.0.0:28334`
+    : `[${form.btcNetwork}]\nzmqpubhashblock=tcp://0.0.0.0:28332\nzmqpubhashtx=tcp://0.0.0.0:28333\nzmqpubrawtx=tcp://0.0.0.0:28334`;
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -335,6 +351,7 @@ export default function SetupPage() {
       }} />
 
       <div className="relative z-10 w-full max-w-lg">
+        {/* Header */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-3 glow-orange"
                style={{ background: 'linear-gradient(135deg, #1A1A25 0%, #12121A 100%)', border: '1px solid rgba(247,147,26,0.4)' }}>
@@ -350,10 +367,16 @@ export default function SetupPage() {
           <Card>
             <h2 className="text-lg font-semibold text-mim-text mb-2">Welcome</h2>
             <p className="text-sm text-mim-text-muted mb-6 leading-relaxed">
-              This wizard will connect MIM-Dashboard to your Bitcoin Core node. Have your RPC credentials ready.
+              This wizard will connect MIM-Dashboard to your Bitcoin Core node.
+              The setup auto-detects your node configuration from the mounted data directory.
             </p>
             <ul className="space-y-2 mb-8">
-              {['Connect to Bitcoin Core via RPC', 'Configure ZeroMQ for live events', 'Set your dashboard password'].map((t) => (
+              {[
+                'Auto-detect bitcoin.conf and .cookie credentials',
+                'Connect to Bitcoin Core via RPC',
+                'Configure ZeroMQ for live block/tx feeds',
+                'Set your dashboard password',
+              ].map((t) => (
                 <li key={t} className="flex items-center gap-2 text-sm text-mim-text-muted">
                   <span className="text-bitcoin-orange">›</span> {t}
                 </li>
@@ -365,55 +388,13 @@ export default function SetupPage() {
           </Card>
         )}
 
-        {/* ── Step 2: bitcoin.conf ── */}
+        {/* ── Step 2: Detect Node ── */}
         {step === 2 && (
           <Card>
-            <h2 className="text-lg font-semibold text-mim-text mb-1">bitcoin.conf</h2>
+            <h2 className="text-lg font-semibold text-mim-text mb-1">Detect Node</h2>
             <p className="text-sm text-mim-text-muted mb-5">
-              Optionally set the path to your bitcoin.conf for the settings editor. You can skip this.
+              Select your network and run auto-detect to read bitcoin.conf and load credentials.
             </p>
-
-            <div className="space-y-4">
-              <Btn onClick={detect} loading={busy} variant="secondary">Scan container paths</Btn>
-
-              {detected.length > 0 && (
-                <div className="space-y-1">
-                  {detected.map((p) => (
-                    <button key={p} onClick={() => patch({ btcConfPath: p })}
-                      className={[
-                        'w-full text-left px-3 py-2 rounded-lg text-xs font-mono border transition-colors',
-                        form.btcConfPath === p
-                          ? 'border-bitcoin-orange text-bitcoin-orange bg-bitcoin-orange/10'
-                          : 'border-mim-border text-mim-text-muted hover:border-mim-text-muted',
-                      ].join(' ')}>
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {detected.length === 0 && !busy && detectHint && (
-                <Info>{detectHint}</Info>
-              )}
-
-              <Field label="Or enter path manually" value={form.btcConfPath}
-                     onChange={(v) => patch({ btcConfPath: v })}
-                     placeholder="/home/user/.bitcoin/bitcoin.conf" />
-            </div>
-
-            {err && <p className="text-xs text-red-400 mt-3 font-mono">{err}</p>}
-            <div className="flex justify-between mt-6">
-              <Btn onClick={back} variant="ghost">← Back</Btn>
-              <Btn onClick={next}>Next →</Btn>
-            </div>
-          </Card>
-        )}
-
-        {/* ── Step 3: RPC ── */}
-        {step === 3 && (
-          <Card>
-            <h2 className="text-lg font-semibold text-mim-text mb-1">RPC Connection</h2>
-            <p className="text-sm text-mim-text-muted mb-5">Connect to your Bitcoin Core node.</p>
 
             <div className="space-y-4">
               {/* Network selector */}
@@ -422,34 +403,122 @@ export default function SetupPage() {
                 <PillGroup
                   options={['mainnet', 'signet', 'testnet'] as Network[]}
                   value={form.btcNetwork}
-                  onChange={changeNetwork}
+                  onChange={(n) => { patch({ btcNetwork: n, rpcPort: NETWORK_PORTS[n] ?? '8332' }); setDetectStatus('idle'); setDetectResult(null); }}
                 />
               </div>
 
+              {/* Mount path info */}
+              <InfoBox>
+                <p className="text-mim-text-dim">Scanning mounted directory:</p>
+                <p className="text-bitcoin-orange">/bitcoin-data → $BTC_DATA_DIR</p>
+                <p className="text-mim-text-dim mt-1">
+                  bitcoin.conf: <span className="text-mim-text">/bitcoin-data/bitcoin.conf</span>
+                </p>
+                <p className="text-mim-text-dim">
+                  .cookie:{' '}
+                  <span className="text-mim-text">
+                    /bitcoin-data/{form.btcNetwork !== 'mainnet' ? `${form.btcNetwork}/` : ''}.cookie
+                  </span>
+                </p>
+              </InfoBox>
+
+              {/* Detect button */}
+              <Btn onClick={detect} loading={busy} variant="secondary">
+                Auto-Detect
+              </Btn>
+
+              {/* Results */}
+              {detectStatus === 'found' && detectResult && (
+                <div className="space-y-2">
+                  <Badge ok={Boolean(detectResult.bitcoinConf)}>
+                    {detectResult.bitcoinConf
+                      ? `bitcoin.conf found — ${Object.keys(detectResult.bitcoinConf.parsed).length} keys parsed`
+                      : 'bitcoin.conf not found'}
+                  </Badge>
+                  <Badge ok={detectResult.cookie.found}>
+                    {detectResult.cookie.found
+                      ? `Cookie auth detected — ${detectResult.cookie.path}`
+                      : 'No .cookie file — will use rpcuser/rpcpassword'}
+                  </Badge>
+                  {detectResult.bitcoinConf?.zmqDetected && (
+                    <Badge ok>ZMQ endpoints detected in bitcoin.conf</Badge>
+                  )}
+                  <p className="text-xs text-green-400 font-mono">
+                    ✓ All fields pre-filled — review in next steps
+                  </p>
+                </div>
+              )}
+
+              {detectStatus === 'not_found' && (
+                <div className="space-y-2">
+                  <Badge ok={false}>
+                    Nothing found at /bitcoin-data — check BTC_DATA_DIR in .env
+                  </Badge>
+                  <InfoBox>
+                    <p>Make sure your .env has the correct path:</p>
+                    <p className="text-bitcoin-orange">BTC_DATA_DIR=/home/user/.bitcoin</p>
+                    <p className="text-mim-text-dim mt-1">Then rebuild:</p>
+                    <p className="text-mim-text">docker compose up -d --build</p>
+                    <p className="text-mim-text-dim mt-1">
+                      You can still proceed and fill credentials manually.
+                    </p>
+                  </InfoBox>
+                </div>
+              )}
+
+              {detectStatus === 'error' && err && (
+                <p className="text-xs text-red-400 font-mono">{err}</p>
+              )}
+            </div>
+
+            <div className="flex justify-between mt-6">
+              <Btn onClick={back} variant="ghost">← Back</Btn>
+              <Btn onClick={next}>
+                {detectStatus === 'idle' ? 'Skip →' : 'Next →'}
+              </Btn>
+            </div>
+          </Card>
+        )}
+
+        {/* ── Step 3: RPC ── */}
+        {step === 3 && (
+          <Card>
+            <h2 className="text-lg font-semibold text-mim-text mb-1">RPC Connection</h2>
+            <p className="text-sm text-mim-text-muted mb-5">
+              {detectStatus === 'found'
+                ? 'Fields pre-filled from your bitcoin.conf. Edit if needed.'
+                : 'Enter your Bitcoin Core RPC credentials.'}
+            </p>
+
+            <div className="space-y-4">
               {/* Host + Port */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
                   <Field label="Host" value={form.rpcHost} onChange={(v) => patch({ rpcHost: v })}
-                         placeholder="host.docker.internal" />
+                         placeholder="host.docker.internal"
+                         hint="Address of your host machine seen from Docker" />
                 </div>
                 <Field label="Port" value={form.rpcPort} onChange={(v) => patch({ rpcPort: v })} />
               </div>
 
               {/* Auth method */}
               <div>
-                <label className="block text-xs text-mim-text-muted mb-1.5 uppercase tracking-widest">Authentication</label>
+                <label className="block text-xs text-mim-text-muted mb-1.5 uppercase tracking-widest">
+                  Authentication
+                </label>
                 <PillGroup<AuthMode>
                   options={['userpass', 'cookie']}
                   value={form.authMode}
-                  onChange={(v) => { patch({ authMode: v }); setErr(''); setCookieReadOk(false); }}
+                  onChange={(v) => { patch({ authMode: v }); setErr(''); }}
                   labels={{ userpass: 'User / Password', cookie: 'Cookie File' }}
                 />
               </div>
 
-              {/* User/Password fields */}
+              {/* User/Password */}
               {form.authMode === 'userpass' && (
                 <div className="space-y-3">
-                  <Field label="RPC User" value={form.rpcUser} onChange={(v) => patch({ rpcUser: v })} placeholder="bitcoin" />
+                  <Field label="RPC User" value={form.rpcUser} onChange={(v) => patch({ rpcUser: v })}
+                         placeholder="bitcoinrpc" />
                   <Field label="RPC Password" type="password" value={form.rpcPass}
                          onChange={(v) => patch({ rpcPass: v })} placeholder="••••••••" />
                 </div>
@@ -458,24 +527,30 @@ export default function SetupPage() {
               {/* Cookie auth */}
               {form.authMode === 'cookie' && (
                 <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs text-mim-text-muted mb-1.5 uppercase tracking-widest">Cookie source</label>
-                    <PillGroup<CookieMethod>
-                      options={['paste', 'volume']}
-                      value={form.cookieMethod}
-                      onChange={(v) => { patch({ cookieMethod: v }); setErr(''); setCookieReadOk(false); }}
-                      labels={{ paste: 'Paste Manually', volume: 'Docker Volume' }}
-                    />
-                  </div>
-
-                  {/* Paste method */}
-                  {form.cookieMethod === 'paste' && (
+                  {detectResult?.cookie?.found ? (
+                    <>
+                      <Badge ok>
+                        Cookie auto-loaded from {detectResult.cookie.path}
+                      </Badge>
+                      <InfoBox>
+                        <p className="text-green-400">User: {form.rpcUser}</p>
+                        <p className="text-mim-text-dim mt-1">
+                          The cookie is re-read on every RPC call — credentials stay
+                          current automatically after each Bitcoin Core restart.
+                        </p>
+                      </InfoBox>
+                    </>
+                  ) : (
                     <div className="space-y-3">
-                      <Info>
-                        Run in your terminal:<br />
-                        <span className="text-bitcoin-orange">{cookieTerminalCmd}</span><br /><br />
-                        Format: <span className="text-mim-text">__cookie__:&lt;password&gt;</span>
-                      </Info>
+                      <InfoBox>
+                        <p>Run in your terminal:</p>
+                        <p className="text-bitcoin-orange">
+                          cat ~/.bitcoin/{form.btcNetwork !== 'mainnet' ? `${form.btcNetwork}/` : ''}.cookie
+                        </p>
+                        <p className="text-mim-text-dim mt-1">
+                          Format: <span className="text-mim-text">__cookie__:&lt;password&gt;</span>
+                        </p>
+                      </InfoBox>
                       <div>
                         <label className="block text-xs text-mim-text-muted mb-1.5 uppercase tracking-widest">
                           Paste cookie content
@@ -487,38 +562,41 @@ export default function SetupPage() {
                           rows={2}
                           className="w-full px-4 py-2.5 rounded-lg font-mono text-sm bg-mim-bg border border-mim-border text-mim-text placeholder-mim-text-dim focus:outline-none focus:border-bitcoin-orange focus:ring-1 focus:ring-bitcoin-orange transition-colors resize-none"
                         />
-                        {parseCookie(form.cookiePaste) && (
-                          <p className="text-xs text-green-400 font-mono mt-1">
-                            ✓ Parsed — user: {parseCookie(form.cookiePaste)?.user}
-                          </p>
+                        {form.rpcUser === '__cookie__' && form.rpcPass && (
+                          <p className="text-xs text-green-400 font-mono mt-1">✓ Parsed — user: {form.rpcUser}</p>
                         )}
                       </div>
                     </div>
                   )}
-
-                  {/* Volume method */}
-                  {form.cookieMethod === 'volume' && (
-                    <div className="space-y-3">
-                      <Info>
-                        Cookie file path in container:<br />
-                        <span className="text-bitcoin-orange">{cookiePath(form.btcNetwork)}</span><br /><br />
-                        To mount your .bitcoin directory, add to <span className="text-mim-text">.env</span>:<br />
-                        <span className="text-bitcoin-orange">BTC_DATA_DIR=/home/user/.bitcoin</span><br />
-                        Then rebuild: <span className="text-mim-text">docker compose up -d --build</span>
-                      </Info>
-                      <Btn onClick={readCookie} loading={busy} variant="secondary">
-                        Read from /bitcoin-data
-                      </Btn>
-                      {cookieReadOk && (
-                        <p className="text-xs text-green-400 font-mono">✓ Cookie read — user: {form.rpcUser}</p>
-                      )}
+                  {/* Editable fields even in cookie mode */}
+                  {!detectResult?.cookie?.found && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="User (auto)" value={form.rpcUser}
+                             onChange={(v) => patch({ rpcUser: v })} readOnly={form.rpcUser === '__cookie__'} />
+                      <Field label="Password (auto)" type="password" value={form.rpcPass}
+                             onChange={(v) => patch({ rpcPass: v })} />
                     </div>
                   )}
                 </div>
               )}
             </div>
 
-            {/* RPC test result */}
+            {/* Conf-detected fields summary */}
+            {detectStatus === 'found' && Object.keys(confParsed).length > 0 && (
+              <details className="mt-4">
+                <summary className="text-xs text-mim-text-muted cursor-pointer hover:text-mim-text font-mono">
+                  Show parsed bitcoin.conf ({Object.keys(confParsed).length} keys)
+                </summary>
+                <div className="mt-2 max-h-36 overflow-y-auto rounded-lg bg-mim-bg border border-mim-border p-3 text-xs font-mono text-mim-text-muted space-y-0.5">
+                  {Object.entries(confParsed).map(([k, v]) => (
+                    <div key={k}>
+                      <span className="text-bitcoin-orange">{k}</span>=<span className="text-mim-text">{k.includes('pass') || k.includes('cookie') ? '●●●●' : v}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+
             {rpcOk && (
               <div className="mt-4 px-4 py-3 rounded-lg bg-green-950/40 border border-green-900/50 text-xs font-mono text-green-400">
                 ✓ Connected — {rpcOk.chain} chain, block {rpcOk.blocks.toLocaleString()}
@@ -529,9 +607,7 @@ export default function SetupPage() {
             <div className="flex justify-between mt-6">
               <Btn onClick={back} variant="ghost">← Back</Btn>
               <div className="flex gap-2">
-                <Btn onClick={testRpc} loading={busy} variant="secondary" disabled={!rpcReady}>
-                  Test
-                </Btn>
+                <Btn onClick={testRpc} loading={busy} variant="secondary" disabled={!rpcReady}>Test</Btn>
                 <Btn onClick={next} disabled={!rpcReady}>Next →</Btn>
               </div>
             </div>
@@ -543,10 +619,28 @@ export default function SetupPage() {
           <Card>
             <h2 className="text-lg font-semibold text-mim-text mb-1">ZeroMQ Config</h2>
             <p className="text-sm text-mim-text-muted mb-4">
-              ZMQ enables real-time block and transaction feeds. Skip if ZMQ is not enabled on your node.
+              ZMQ enables real-time block and transaction feeds.
             </p>
 
-            <label className="flex items-center gap-2 mb-5 cursor-pointer">
+            {zmqNotDetected && !form.skipZmq && (
+              <div className="mb-4 space-y-2">
+                <Badge ok={false}>ZMQ not found in bitcoin.conf</Badge>
+                <details>
+                  <summary className="text-xs text-yellow-400 cursor-pointer hover:text-yellow-300 font-mono">
+                    Add these lines to bitcoin.conf and restart Bitcoin Core
+                  </summary>
+                  <pre className="mt-2 px-4 py-3 rounded-lg bg-mim-bg border border-mim-border text-xs font-mono text-mim-text whitespace-pre-wrap">
+                    {zmqExampleConf}
+                  </pre>
+                </details>
+              </div>
+            )}
+
+            {detectResult?.bitcoinConf?.zmqDetected && !form.skipZmq && (
+              <Badge ok>ZMQ endpoints auto-filled from bitcoin.conf</Badge>
+            )}
+
+            <label className="flex items-center gap-2 my-4 cursor-pointer">
               <input type="checkbox" checked={form.skipZmq}
                      onChange={(e) => patch({ skipZmq: e.target.checked })}
                      className="accent-bitcoin-orange" />
@@ -555,15 +649,12 @@ export default function SetupPage() {
 
             {!form.skipZmq && (
               <div className="space-y-3">
-                <Field label="Block URL (hashblock)" value={form.zmqBlockUrl}
-                       onChange={(v) => patch({ zmqBlockUrl: v })}
-                       hint="zmqpubhashblock in bitcoin.conf" />
-                <Field label="Tx URL (hashtx)" value={form.zmqTxUrl}
-                       onChange={(v) => patch({ zmqTxUrl: v })}
-                       hint="zmqpubhashtx in bitcoin.conf" />
-                <Field label="Raw Tx URL (rawtx)" value={form.zmqRawTxUrl}
-                       onChange={(v) => patch({ zmqRawTxUrl: v })}
-                       hint="zmqpubrawtx in bitcoin.conf" />
+                <Field label="Block URL (zmqpubhashblock)" value={form.zmqBlockUrl}
+                       onChange={(v) => patch({ zmqBlockUrl: v })} />
+                <Field label="Tx URL (zmqpubhashtx)" value={form.zmqTxUrl}
+                       onChange={(v) => patch({ zmqTxUrl: v })} />
+                <Field label="Raw Tx URL (zmqpubrawtx)" value={form.zmqRawTxUrl}
+                       onChange={(v) => patch({ zmqRawTxUrl: v })} />
               </div>
             )}
 
@@ -579,9 +670,7 @@ export default function SetupPage() {
         {step === 5 && (
           <Card>
             <h2 className="text-lg font-semibold text-mim-text mb-1">Dashboard Password</h2>
-            <p className="text-sm text-mim-text-muted mb-6">
-              Set the password to log in to MIM-Dashboard.
-            </p>
+            <p className="text-sm text-mim-text-muted mb-6">Set the password to log in to MIM-Dashboard.</p>
             <div className="space-y-3">
               <Field label="Password" type="password" value={form.password}
                      onChange={(v) => patch({ password: v })} placeholder="Minimum 8 characters" />
@@ -605,15 +694,17 @@ export default function SetupPage() {
         {step === 6 && (
           <Card>
             <h2 className="text-lg font-semibold text-mim-text mb-4">Ready to Launch</h2>
-            <div className="space-y-0 mb-6 rounded-lg overflow-hidden border border-mim-border">
+            <div className="rounded-lg overflow-hidden border border-mim-border mb-6">
               {[
-                ['Network',    form.btcNetwork],
-                ['RPC Host',   `${form.rpcHost}:${form.rpcPort}`],
-                ['Auth',       form.authMode === 'cookie' ? `Cookie (${form.cookieMethod})` : `User: ${form.rpcUser}`],
-                ['ZMQ',        form.skipZmq ? 'Disabled' : form.zmqBlockUrl],
-                ['bitcoin.conf', form.btcConfPath || 'Not set'],
+                ['Network',  form.btcNetwork],
+                ['RPC Host', `${form.rpcHost}:${form.rpcPort}`],
+                ['Auth',     form.authMode === 'cookie'
+                  ? `Cookie${detectResult?.cookie?.found ? ' (auto-refresh)' : ' (pasted)'}`
+                  : `User: ${form.rpcUser}`],
+                ['ZMQ',      form.skipZmq ? 'Disabled' : form.zmqBlockUrl],
+                ['bitcoin.conf', detectResult?.bitcoinConf ? '/bitcoin-data/bitcoin.conf' : 'Not set'],
               ].map(([k, v]) => (
-                <div key={k} className="flex justify-between px-4 py-2.5 text-sm border-b border-mim-border last:border-0 bg-mim-bg/40">
+                <div key={k} className="flex justify-between px-4 py-2.5 border-b border-mim-border last:border-0 bg-mim-bg/40">
                   <span className="text-mim-text-muted font-mono text-xs uppercase tracking-wider">{k}</span>
                   <span className="text-mim-text font-mono text-xs truncate max-w-[220px] text-right">{v}</span>
                 </div>
