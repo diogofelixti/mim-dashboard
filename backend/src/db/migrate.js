@@ -108,6 +108,15 @@ export async function migrate() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS node_config (
+        id         SERIAL PRIMARY KEY,
+        key        VARCHAR(50) UNIQUE NOT NULL,
+        value      TEXT        NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
     // Indices
     await client.query(`CREATE INDEX IF NOT EXISTS idx_blocks_log_height      ON blocks_log(height)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_fee_history_recorded_at ON fee_history(recorded_at)`);

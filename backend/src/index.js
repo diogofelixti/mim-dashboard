@@ -1,8 +1,8 @@
 import Fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
 
-import config from './config.js';
-import { migrate } from './db/migrate.js';
+import config, { _setPool, loadConfigFromDB } from './config.js';
+import { pool, migrate } from './db/migrate.js';
 import { setupAuth, ensureAdminUser } from './auth/auth.js';
 import { setupWebSocket } from './websocket/server.js';
 import zmqSubscriber from './zmq/subscriber.js';
@@ -13,6 +13,7 @@ import { setupWalletRoutes } from './routes/wallets.routes.js';
 import { setupWatchlistRoutes, setupAlertRoutes } from './routes/watchlist.routes.js';
 import { setupPriceRoutes } from './routes/price.routes.js';
 import { setupSettingsRoutes } from './routes/settings.routes.js';
+import { setupSetupRoutes } from './routes/setup.routes.js';
 
 import { startFeeTracker, setupFeeHistoryRoutes } from './services/fee-tracker.js';
 import { startAlertChecker } from './services/alert-checker.js';
@@ -29,11 +30,18 @@ async function start() {
     await fastify.register(fastifyCors, { origin: true });
 
     await migrate();
+
+    // Wire pool into config so loadConfigFromDB / saveConfigToDB work
+    _setPool(pool);
+    await loadConfigFromDB();
+
+    // Legacy: create admin from AUTH_PASSWORD env var if present
     await ensureAdminUser();
 
     await setupAuth(fastify);
     await setupWebSocket(fastify);
 
+    await setupSetupRoutes(fastify);
     await setupNodeRoutes(fastify);
     await setupBlockRoutes(fastify);
     await setupWalletRoutes(fastify);

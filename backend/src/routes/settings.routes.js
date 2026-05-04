@@ -1,8 +1,9 @@
 import fs from 'fs/promises';
 import bcrypt from 'bcryptjs';
-import config from '../config.js';
+import config, { saveConfigToDB, getNodeConfigFromDB } from '../config.js';
 import { pool } from '../db/migrate.js';
 import { getBlockchainInfo } from '../rpc/client.js';
+import zmqSubscriber from '../zmq/subscriber.js';
 
 export async function setupSettingsRoutes(fastify) {
   const protect = { preHandler: [fastify.authenticate] };
@@ -111,6 +112,59 @@ export async function setupSettingsRoutes(fastify) {
       return { connected: true };
     } catch (err) {
       return reply.code(502).send({ error: err.message });
+    }
+  });
+
+  // ── Node config (RPC + ZMQ) ─────────────────────────────────────────────────
+
+  fastify.get('/api/settings/node-config', protect, async (_req, reply) => {
+    try {
+      const raw = await getNodeConfigFromDB();
+      return {
+        rpcHost:    raw.rpc_host    ?? config.btc.rpcHost,
+        rpcPort:    raw.rpc_port    ?? String(config.btc.rpcPort),
+        rpcUser:    raw.rpc_user    ?? config.btc.rpcUser,
+        rpcPass:    raw.rpc_pass    ?? config.btc.rpcPass,
+        btcConfPath: raw.btc_conf_path ?? config.btc.confPath ?? '',
+        zmqBlockUrl:  raw.zmq_block_url  ?? config.zmq.blockUrl,
+        zmqTxUrl:     raw.zmq_tx_url     ?? config.zmq.txUrl,
+        zmqRawTxUrl:  raw.zmq_raw_tx_url ?? config.zmq.rawTxUrl,
+      };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  fastify.put('/api/settings/node-config', protect, async (request, reply) => {
+    const {
+      rpcHost, rpcPort, rpcUser, rpcPass,
+      btcConfPath, zmqBlockUrl, zmqTxUrl, zmqRawTxUrl,
+    } = request.body ?? {};
+
+    if (!rpcHost || !rpcUser || !rpcPass) {
+      return reply.code(400).send({ error: 'rpcHost, rpcUser, rpcPass required' });
+    }
+
+    const configs = {
+      rpc_host: rpcHost,
+      rpc_port: rpcPort ?? 8332,
+      rpc_user: rpcUser,
+      rpc_pass: rpcPass,
+    };
+    if (zmqBlockUrl)  configs.zmq_block_url  = zmqBlockUrl;
+    if (zmqTxUrl)     configs.zmq_tx_url     = zmqTxUrl;
+    if (zmqRawTxUrl)  configs.zmq_raw_tx_url = zmqRawTxUrl;
+    if (btcConfPath !== undefined) configs.btc_conf_path = btcConfPath;
+
+    try {
+      await saveConfigToDB(configs);
+      zmqSubscriber.stop();
+      zmqSubscriber.start().catch((err) =>
+        fastify.log.warn(`[zmq] reconnect error: ${err.message}`)
+      );
+      return { success: true };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
     }
   });
 

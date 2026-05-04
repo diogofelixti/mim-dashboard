@@ -4,6 +4,10 @@ import config from '../config.js';
 import { pool } from '../db/migrate.js';
 
 export async function ensureAdminUser() {
+  // Only applies to legacy .env-based setups (AUTH_PASSWORD set).
+  // New installs go through the setup wizard which creates the user directly.
+  if (!config.auth.password) return;
+
   const { rows } = await pool.query(
     `SELECT id FROM users WHERE username = $1 LIMIT 1`,
     ['admin']
@@ -15,7 +19,7 @@ export async function ensureAdminUser() {
       `INSERT INTO users (username, password_hash) VALUES ($1, $2)`,
       ['admin', hash]
     );
-    console.log('[auth] Admin user created.');
+    console.log('[auth] Admin user created from AUTH_PASSWORD.');
   }
 }
 
