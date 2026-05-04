@@ -26,8 +26,13 @@ const config = {
     rpcUser:  process.env.BTC_RPC_USER ?? '',
     rpcPass:  process.env.BTC_RPC_PASS ?? '',
     confPath: process.env.BTC_CONF_PATH ?? null,
+    authType: 'userpass',
+    network:  'mainnet',
     get rpcUrl() {
-      return `http://${this.rpcUser}:${this.rpcPass}@${this.rpcHost}:${this.rpcPort}`;
+      return `http://${this.rpcHost}:${this.rpcPort}`;
+    },
+    get rpcAuth() {
+      return 'Basic ' + Buffer.from(`${this.rpcUser}:${this.rpcPass}`).toString('base64');
     },
   },
 
@@ -47,14 +52,16 @@ const config = {
 
 // Maps node_config DB keys → config object paths
 const KEY_MAP = {
-  rpc_host:       (v) => { config.btc.rpcHost  = v; },
-  rpc_port:       (v) => { config.btc.rpcPort  = parseInt(v, 10); },
-  rpc_user:       (v) => { config.btc.rpcUser  = v; },
-  rpc_pass:       (v) => { config.btc.rpcPass  = v; },
-  btc_conf_path:  (v) => { config.btc.confPath = v || null; },
-  zmq_block_url:  (v) => { config.zmq.blockUrl = v; },
-  zmq_tx_url:     (v) => { config.zmq.txUrl    = v; },
-  zmq_raw_tx_url: (v) => { config.zmq.rawTxUrl = v; },
+  rpc_host:       (v) => { config.btc.rpcHost   = v; },
+  rpc_port:       (v) => { config.btc.rpcPort   = parseInt(v, 10); },
+  rpc_user:       (v) => { config.btc.rpcUser   = v; },
+  rpc_pass:       (v) => { config.btc.rpcPass   = v; },
+  btc_conf_path:  (v) => { config.btc.confPath  = v || null; },
+  auth_type:      (v) => { config.btc.authType  = v; },
+  btc_network:    (v) => { config.btc.network   = v; },
+  zmq_block_url:  (v) => { config.zmq.blockUrl  = v; },
+  zmq_tx_url:     (v) => { config.zmq.txUrl     = v; },
+  zmq_raw_tx_url: (v) => { config.zmq.rawTxUrl  = v; },
 };
 
 export async function loadConfigFromDB() {

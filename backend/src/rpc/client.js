@@ -3,17 +3,14 @@ import config from '../config.js';
 let _id = 0;
 
 async function rpcCall(method, params = [], wallet = null) {
-  const url = wallet
-    ? `${config.btc.rpcUrl}/wallet/${encodeURIComponent(wallet)}`
-    : config.btc.rpcUrl;
+  const base = config.btc.rpcUrl;
+  const url = wallet ? `${base}/wallet/${encodeURIComponent(wallet)}` : base;
 
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization:
-        'Basic ' +
-        Buffer.from(`${config.btc.rpcUser}:${config.btc.rpcPass}`).toString('base64'),
+      Authorization: config.btc.rpcAuth,
     },
     body: JSON.stringify({
       jsonrpc: '2.0',

@@ -32,6 +32,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ${BTC_DATA_DIR:-/tmp/mim-btcdata}:/bitcoin-data:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
