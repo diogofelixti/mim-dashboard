@@ -32,7 +32,7 @@ export async function migrate() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS preferences (
         id                SERIAL PRIMARY KEY,
-        user_id           INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_id           INTEGER     NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
         theme             VARCHAR(32) NOT NULL DEFAULT 'dark',
         default_currency  VARCHAR(8)  NOT NULL DEFAULT 'USD',
         language          VARCHAR(8)  NOT NULL DEFAULT 'en',

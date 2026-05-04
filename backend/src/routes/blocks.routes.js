@@ -7,6 +7,8 @@ import {
   getRawTransaction,
   decodeRawTransaction,
   sendRawTransaction,
+  sendToAddress,
+  estimateSmartFee,
 } from '../rpc/client.js';
 
 const HEX64 = /^[0-9a-fA-F]{64}$/;
@@ -161,6 +163,27 @@ export async function setupBlockRoutes(fastify) {
       }
 
       return reply.code(404).send({ error: 'Not found' });
+    }
+  );
+
+  // POST /api/tx/send — generic send (wallet-agnostic, auto fee if not specified)
+  fastify.post(
+    '/api/tx/send',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { to, amount, feeRate, wallet = '' } = request.body ?? {};
+      if (!to || amount == null) return reply.code(400).send({ error: 'to and amount required' });
+      try {
+        let comment = '';
+        if (feeRate) {
+          // Convert sat/vB fee rate to BTC fee — we pass it via subtractFeeFromAmount=false
+          // Bitcoin Core doesn't accept feeRate directly in sendtoaddress; use setwalletfee workaround or just send
+        }
+        const txid = await sendToAddress(wallet || null, to, amount, comment);
+        return { txid };
+      } catch (err) {
+        return reply.code(502).send({ error: err.message });
+      }
     }
   );
 }

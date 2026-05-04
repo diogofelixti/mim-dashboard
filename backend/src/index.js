@@ -12,6 +12,7 @@ import { setupBlockRoutes } from './routes/blocks.routes.js';
 import { setupWalletRoutes } from './routes/wallets.routes.js';
 import { setupWatchlistRoutes, setupAlertRoutes } from './routes/watchlist.routes.js';
 import { setupPriceRoutes } from './routes/price.routes.js';
+import { setupSettingsRoutes } from './routes/settings.routes.js';
 
 import { startFeeTracker, setupFeeHistoryRoutes } from './services/fee-tracker.js';
 import { startAlertChecker } from './services/alert-checker.js';
@@ -39,6 +40,7 @@ async function start() {
     await setupWatchlistRoutes(fastify);
     await setupAlertRoutes(fastify);
     await setupPriceRoutes(fastify);
+    await setupSettingsRoutes(fastify);
     await setupFeeHistoryRoutes(fastify);
 
     fastify.get('/api/health', async () => ({ status: 'ok', ts: Date.now() }));
