@@ -195,7 +195,7 @@ export default function BlockDetailPage() {
                 >
                   <td className="px-4 py-3">
                     <Link
-                      href={`/explorer/tx/${tx.txid}`}
+                      href={`/explorer/tx/${tx.txid}?blockhash=${block.hash}`}
                       className="text-hash hover:text-mim-text font-mono transition-colors"
                     >
                       {formatHash(tx.txid, 10)}

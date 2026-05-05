@@ -33,7 +33,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ${BTC_DATA_DIR:-/home/${USER}/.bitcoin}:/bitcoin-data:ro
+      - /:/host-fs:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

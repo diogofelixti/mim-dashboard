@@ -1,24 +1,18 @@
 import fs from 'fs/promises';
+import { execSync } from 'child_process';
+import path from 'path';
 import bcrypt from 'bcryptjs';
 import { saveConfigToDB } from '../config.js';
 import { pool } from '../db/migrate.js';
 import zmqSubscriber from '../zmq/subscriber.js';
 
-// Maps network name → conf section name + data subdirectory
+const HOST_PREFIX = '/host-fs';
+
 const NETWORK_META = {
   mainnet: { section: 'main',   subdir: '',          port: 8332  },
   signet:  { section: 'signet', subdir: 'signet',    port: 38332 },
   testnet: { section: 'test',   subdir: 'testnet3',  port: 18332 },
 };
-
-function networkDir(network) {
-  const sub = NETWORK_META[network]?.subdir ?? '';
-  return sub ? `/bitcoin-data/${sub}` : '/bitcoin-data';
-}
-
-function cookieFilePath(network) {
-  return `${networkDir(network)}/.cookie`;
-}
 
 function toDockerHost(url) {
   if (!url) return null;
@@ -28,7 +22,7 @@ function toDockerHost(url) {
   );
 }
 
-// targetNetwork=null means parse everything (no section filtering — used for per-network conf files)
+// targetNetwork=null parses without section filtering (merges all sections)
 function parseBitcoinConf(raw, targetNetwork) {
   const sectionName = targetNetwork ? (NETWORK_META[targetNetwork]?.section ?? targetNetwork) : null;
   const global = {};
@@ -48,24 +42,163 @@ function parseBitcoinConf(raw, targetNetwork) {
     else (sections[current] ??= {})[k] = v;
   }
 
-  // No section filter: return everything (global + all sections merged)
   if (sectionName === null) {
     return { ...global, ...Object.values(sections).reduce((a, b) => ({ ...a, ...b }), {}) };
   }
-
   return { ...global, ...(sections[sectionName] ?? {}) };
 }
 
-async function readCookieFile(network) {
+function isLikelyBitcoinConf(raw) {
+  const lower = raw.toLowerCase();
+  return (
+    lower.includes('rpcuser') ||
+    lower.includes('rpcpassword') ||
+    lower.includes('rpcport') ||
+    lower.includes('datadir') ||
+    lower.includes('signet=') ||
+    lower.includes('testnet=') ||
+    lower.includes('zmqpub') ||
+    lower.includes('[main]') ||
+    lower.includes('[test]') ||
+    lower.includes('[signet]')
+  );
+}
+
+function detectNetwork(parsed, confContainerPath) {
+  if (parsed.signet === '1') return 'signet';
+  if (parsed.testnet === '1') return 'testnet';
+  if (confContainerPath.includes('/signet/')) return 'signet';
+  if (confContainerPath.includes('/testnet3/') || confContainerPath.includes('/testnet/')) return 'testnet';
+  return 'mainnet';
+}
+
+function findBitcoinConfPaths() {
+  const results = new Set();
+
+  // Home + root: deeper scan — usually fast on local filesystems
   try {
-    const raw = await fs.readFile(cookieFilePath(network), 'utf8');
+    const out = execSync(
+      `find ${HOST_PREFIX}/home ${HOST_PREFIX}/root -maxdepth 6 -name bitcoin.conf 2>/dev/null || true`,
+      { encoding: 'utf8', timeout: 10000 }
+    );
+    out.trim().split('\n').filter(Boolean).forEach((p) => results.add(p));
+  } catch { /* timeout or not found */ }
+
+  // Mounted drives: shallow scan (depth 3) to avoid scanning large backups/libraries
+  try {
+    const out = execSync(
+      `find ${HOST_PREFIX}/mnt ${HOST_PREFIX}/media -maxdepth 3 -name bitcoin.conf 2>/dev/null || true`,
+      { encoding: 'utf8', timeout: 5000 }
+    );
+    out.trim().split('\n').filter(Boolean).forEach((p) => results.add(p));
+  } catch { /* timeout or not found */ }
+
+  return [...results];
+}
+
+async function readCookieAt(containerPath) {
+  try {
+    const raw = await fs.readFile(containerPath, 'utf8');
     const t = raw.trim();
     const i = t.indexOf(':');
     if (i === -1) return null;
-    return { user: t.slice(0, i), pass: t.slice(i + 1) };
+    return { user: t.slice(0, i), pass: t.slice(i + 1), containerPath };
   } catch {
     return null;
   }
+}
+
+function cookieCandidates(parsed, confDir, network) {
+  const meta = NETWORK_META[network];
+  const candidates = [];
+
+  // If conf is already inside the network subdir, look there first
+  if (meta?.subdir && confDir.endsWith('/' + meta.subdir)) {
+    candidates.push(path.join(confDir, '.cookie'));
+  }
+
+  // Try network subdir under conf's parent
+  if (meta?.subdir) {
+    candidates.push(path.join(path.dirname(confDir), meta.subdir, '.cookie'));
+    candidates.push(path.join(confDir, meta.subdir, '.cookie'));
+  }
+
+  // Conf dir itself
+  candidates.push(path.join(confDir, '.cookie'));
+
+  // If datadir is specified in conf, try there
+  const datadir = parsed.datadir;
+  if (datadir) {
+    const hdDatadir = HOST_PREFIX + datadir;
+    if (meta?.subdir) candidates.push(path.join(hdDatadir, meta.subdir, '.cookie'));
+    candidates.push(path.join(hdDatadir, '.cookie'));
+  }
+
+  return [...new Set(candidates)];
+}
+
+async function buildNodeInfo(confContainerPath) {
+  // Skip example/template configs shipped with Bitcoin Core binaries
+  if (confContainerPath.includes('/share/examples/') || confContainerPath.includes('/contrib/')) return null;
+
+  let raw = '';
+  try { raw = await fs.readFile(confContainerPath, 'utf8'); }
+  catch { return null; }
+
+  if (!isLikelyBitcoinConf(raw)) return null;
+
+  const parsedAll = parseBitcoinConf(raw, null);
+  const network   = detectNetwork(parsedAll, confContainerPath);
+  const parsed    = parseBitcoinConf(raw, network);
+
+  const confDir = path.dirname(confContainerPath);
+  const candidates = cookieCandidates(parsed, confDir, network);
+
+  let cookie = null;
+  for (const cp of candidates) {
+    cookie = await readCookieAt(cp);
+    if (cookie) break;
+  }
+
+  // Skip configs with no usable data (no credentials, no network/zmq settings, no cookie)
+  const hasCredentials = parsed.rpcuser || parsed.rpcpassword;
+  const hasSettings    = parsed.server || parsed.zmqpubhashblock || parsed.zmqpubhashtx || parsed.datadir;
+  if (!hasCredentials && !hasSettings && !cookie) return null;
+
+  const rpcUser = cookie?.user ?? parsed.rpcuser   ?? '';
+  const rpcPass = cookie?.pass ?? parsed.rpcpassword ?? '';
+  const authType = cookie ? 'cookie' : 'userpass';
+
+  const defaultPort = NETWORK_META[network]?.port ?? 8332;
+  const zmqBlock  = toDockerHost(parsed.zmqpubhashblock ?? parsed.zmqpubrawblock) ?? 'tcp://host.docker.internal:28332';
+  const zmqTx     = toDockerHost(parsed.zmqpubhashtx)  ?? 'tcp://host.docker.internal:28333';
+  const zmqRawTx  = toDockerHost(parsed.zmqpubrawtx)   ?? 'tcp://host.docker.internal:28334';
+  const zmqDetected = Boolean(parsed.zmqpubhashblock || parsed.zmqpubhashtx || parsed.zmqpubrawtx);
+
+  const hostConfPath = confContainerPath.replace(/^\/host-fs/, '');
+
+  return {
+    confPath:   hostConfPath,
+    datadir:    parsed.datadir ?? path.dirname(hostConfPath),
+    network,
+    parsed,
+    zmqDetected,
+    cookie: cookie
+      ? { found: true, user: cookie.user, path: cookie.containerPath.replace(/^\/host-fs/, '') }
+      : { found: false },
+    suggestedConfig: {
+      rpc_host:       'host.docker.internal',
+      rpc_port:       parsed.rpcport ? parseInt(parsed.rpcport, 10) : defaultPort,
+      rpc_user:       rpcUser,
+      rpc_pass:       rpcPass,
+      auth_type:      authType,
+      zmq_block_url:  zmqBlock,
+      zmq_tx_url:     zmqTx,
+      zmq_raw_tx_url: zmqRawTx,
+      zmq_detected:   zmqDetected,
+      cookie_path:    cookie ? cookie.containerPath : null,
+    },
+  };
 }
 
 export async function setupSetupRoutes(fastify) {
@@ -81,98 +214,25 @@ export async function setupSetupRoutes(fastify) {
     }
   });
 
-  // GET /api/setup/detect?network=mainnet|signet|testnet — no auth
-  fastify.get('/api/setup/detect', async (request) => {
-    const network = request.query.network ?? 'mainnet';
-    const defaultPort = NETWORK_META[network]?.port ?? 8332;
-    const netDir = networkDir(network);
+  // GET /api/setup/detect — no auth
+  fastify.get('/api/setup/detect', async () => {
+    const confPaths = findBitcoinConfPaths();
 
-    // Read bitcoin.conf: check root first, then network subdirectory.
-    // Many users keep a per-network conf at ~/.bitcoin/<network>/bitcoin.conf.
-    // Merge both files; network-specific file takes precedence over root.
-    let bitcoinConf = null;
-    try {
-      const paths = [
-        '/bitcoin-data/bitcoin.conf',
-        ...(netDir !== '/bitcoin-data' ? [`${netDir}/bitcoin.conf`] : []),
-      ];
+    const results = await Promise.all(confPaths.map((p) => buildNodeInfo(p)));
+    const nodes = results.filter(Boolean);
 
-      let merged = {};
-      let rawCombined = '';
-      for (const p of paths) {
-        try {
-          const raw = await fs.readFile(p, 'utf8');
-          if (raw.trim()) {
-            rawCombined += (rawCombined ? '\n' : '') + `# from ${p}\n` + raw;
-            // Network-specific conf is parsed as-is (no section filtering needed)
-            const isNetSubdir = p.startsWith(netDir + '/');
-            const parsed = isNetSubdir
-              ? parseBitcoinConf(raw, null)   // parse without section filter
-              : parseBitcoinConf(raw, network);
-            merged = { ...merged, ...parsed };
-          }
-        } catch { /* file missing, skip */ }
-      }
-
-      if (Object.keys(merged).length > 0 || rawCombined) {
-        bitcoinConf = {
-          parsed: merged,
-          zmqDetected: Boolean(merged.zmqpubhashblock || merged.zmqpubhashtx || merged.zmqpubrawtx),
-        };
-      }
-    } catch { /* not mounted */ }
-
-    // Read .cookie from network subdirectory
-    const cookie = await readCookieFile(network);
-
-    const p = bitcoinConf?.parsed ?? {};
-
-    // Build suggested config — prefer cookie auth if available
-    const rpcUser = cookie?.user ?? p.rpcuser ?? '';
-    const rpcPass = cookie?.pass ?? p.rpcpassword ?? '';
-    const authType = cookie ? 'cookie' : (rpcUser ? 'userpass' : 'userpass');
-
-    const zmqBlock   = toDockerHost(p.zmqpubhashblock  ?? p.zmqpubrawblock)  ?? 'tcp://host.docker.internal:28332';
-    const zmqTx      = toDockerHost(p.zmqpubhashtx)                          ?? 'tcp://host.docker.internal:28333';
-    const zmqRawTx   = toDockerHost(p.zmqpubrawtx)                           ?? 'tcp://host.docker.internal:28334';
-
-    const suggestedConfig = {
-      rpc_host:       'host.docker.internal',
-      rpc_port:       p.rpcport ? parseInt(p.rpcport, 10) : defaultPort,
-      rpc_user:       rpcUser,
-      rpc_pass:       rpcPass,
-      auth_type:      authType,
-      zmq_block_url:  zmqBlock,
-      zmq_tx_url:     zmqTx,
-      zmq_raw_tx_url: zmqRawTx,
-      zmq_detected:   bitcoinConf?.zmqDetected ?? false,
-    };
+    // Deduplicate by confPath
+    const seen = new Set();
+    const uniqueNodes = nodes.filter((n) => {
+      if (seen.has(n.confPath)) return false;
+      seen.add(n.confPath);
+      return true;
+    });
 
     return {
-      found: !!(bitcoinConf || cookie),
-      network,
-      bitcoinConf: bitcoinConf
-        ? { parsed: bitcoinConf.parsed, zmqDetected: bitcoinConf.zmqDetected }
-        : null,
-      cookie: cookie
-        ? { found: true, user: cookie.user, path: cookieFilePath(network) }
-        : { found: false },
-      suggestedConfig,
-      mountPath: '/bitcoin-data',
+      nodes: uniqueNodes,
+      suggestedConfig: uniqueNodes[0]?.suggestedConfig ?? null,
     };
-  });
-
-  // GET /api/setup/read-cookie?network=... — no auth, also useful post-setup
-  fastify.get('/api/setup/read-cookie', async (request, reply) => {
-    const network = request.query.network ?? 'mainnet';
-    const cookie = await readCookieFile(network);
-    if (!cookie) {
-      return reply.code(404).send({
-        found: false,
-        error: `Cookie not found at ${cookieFilePath(network)}. Set BTC_DATA_DIR in .env and rebuild.`,
-      });
-    }
-    return { found: true, user: cookie.user, pass: cookie.pass, path: cookieFilePath(network) };
   });
 
   // POST /api/setup/test-rpc — no auth
@@ -203,8 +263,8 @@ export async function setupSetupRoutes(fastify) {
     const {
       rpcHost, rpcPort, rpcUser, rpcPass,
       zmqBlockUrl, zmqTxUrl, zmqRawTxUrl,
-      btcConfPath, password,
-      authType = 'userpass',
+      btcConfPath, cookiePath, password,
+      authType   = 'userpass',
       btcNetwork = 'mainnet',
     } = request.body ?? {};
 
@@ -228,6 +288,7 @@ export async function setupSetupRoutes(fastify) {
       setup_completed: 'true',
     };
     if (btcConfPath) configs.btc_conf_path = btcConfPath;
+    if (cookiePath)  configs.cookie_path   = cookiePath;
 
     await saveConfigToDB(configs);
 

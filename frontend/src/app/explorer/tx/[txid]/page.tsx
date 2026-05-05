@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { formatHash, formatNumber, formatBytes } from '@/lib/formatters';
@@ -37,8 +37,9 @@ type TxDetail = {
   hex?: string;
 };
 
-export default function TxDetailPage() {
+function TxDetailContent() {
   const { txid } = useParams<{ txid: string }>();
+  const searchParams = useSearchParams();
 
   const [tx,        setTx]        = useState<TxDetail | null>(null);
   const [loading,   setLoading]   = useState(true);
@@ -47,11 +48,13 @@ export default function TxDetailPage() {
   const [copied,    setCopied]    = useState(false);
 
   useEffect(() => {
-    api<TxDetail>(`/api/tx/${encodeURIComponent(txid)}`)
+    const blockhash = searchParams.get('blockhash');
+    const qs = blockhash ? `?blockhash=${blockhash}` : '';
+    api<TxDetail>(`/api/tx/${encodeURIComponent(txid)}${qs}`)
       .then(setTx)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [txid]);
+  }, [txid, searchParams]);
 
   function copyTxid() {
     navigator.clipboard.writeText(txid);
@@ -233,5 +236,15 @@ export default function TxDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function TxDetailPage() {
+  return (
+    <Suspense fallback={
+      <div className="text-mim-text-muted text-sm animate-pulse">Loading transaction…</div>
+    }>
+      <TxDetailContent />
+    </Suspense>
   );
 }

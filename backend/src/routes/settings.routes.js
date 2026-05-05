@@ -15,25 +15,15 @@ export async function setupSettingsRoutes(fastify) {
       return reply.code(503).send({ error: 'BTC_CONF_PATH not configured' });
     }
     try {
-      const conf = await fs.readFile(config.btc.confPath, 'utf8');
+      const conf = await fs.readFile('/host-fs' + config.btc.confPath, 'utf8');
       return { conf };
     } catch (err) {
       return reply.code(500).send({ error: err.message });
     }
   });
 
-  fastify.put('/api/settings/bitcoin-conf', protect, async (request, reply) => {
-    if (!config.btc.confPath) {
-      return reply.code(503).send({ error: 'BTC_CONF_PATH not configured' });
-    }
-    const { conf } = request.body ?? {};
-    if (typeof conf !== 'string') return reply.code(400).send({ error: 'conf required' });
-    try {
-      await fs.writeFile(config.btc.confPath, conf, 'utf8');
-      return { success: true };
-    } catch (err) {
-      return reply.code(500).send({ error: err.message });
-    }
+  fastify.put('/api/settings/bitcoin-conf', protect, async (_req, reply) => {
+    return reply.code(503).send({ error: 'bitcoin.conf is mounted read-only — edit it directly on the host' });
   });
 
   // ── Preferences ─────────────────────────────────────────────────────────────

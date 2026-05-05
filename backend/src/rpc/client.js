@@ -3,25 +3,33 @@ import config from '../config.js';
 
 let _id = 0;
 
-const COOKIE_PATHS = {
-  mainnet: '/bitcoin-data/.cookie',
-  signet:  '/bitcoin-data/signet/.cookie',
-  testnet: '/bitcoin-data/testnet3/.cookie',
-};
+// Cookie cache: avoid reading disk on every single RPC call.
+// Invalidated on 403 (bitcoind restarted with a new cookie).
+let _cachedAuth = null;
+let _cacheTs = 0;
+const CACHE_TTL_MS = 5000;
 
-// Reads the .cookie file on every call when auth_type is 'cookie'.
-// This ensures we always use the current credentials even after bitcoind restarts.
+function invalidateCookieCache() {
+  _cachedAuth = null;
+  _cacheTs = 0;
+}
+
 async function getAuth() {
-  if (config.btc.authType === 'cookie') {
-    const cookiePath = COOKIE_PATHS[config.btc.network] ?? COOKIE_PATHS.mainnet;
+  if (config.btc.authType === 'cookie' && config.btc.cookiePath) {
+    const now = Date.now();
+    if (_cachedAuth && (now - _cacheTs) < CACHE_TTL_MS) return _cachedAuth;
     try {
-      const raw = await fs.readFile(cookiePath, 'utf8');
+      const raw = await fs.readFile(config.btc.cookiePath, 'utf8');
       const t = raw.trim();
       const i = t.indexOf(':');
       if (i !== -1) {
-        return 'Basic ' + Buffer.from(t).toString('base64');
+        _cachedAuth = 'Basic ' + Buffer.from(t).toString('base64');
+        _cacheTs = now;
+        return _cachedAuth;
       }
-    } catch { /* fall through */ }
+    } catch (err) {
+      console.warn('[rpc] Could not read cookie file:', err.message);
+    }
   }
   return config.btc.rpcAuth;
 }
@@ -30,7 +38,7 @@ async function rpcCall(method, params = [], wallet = null) {
   const base = config.btc.rpcUrl;
   const url = wallet ? `${base}/wallet/${encodeURIComponent(wallet)}` : base;
 
-  const res = await fetch(url, {
+  let res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -38,6 +46,19 @@ async function rpcCall(method, params = [], wallet = null) {
     },
     body: JSON.stringify({ jsonrpc: '2.0', id: ++_id, method, params }),
   });
+
+  // On 403, the cookie is stale — re-read from disk and retry once
+  if (res.status === 403 && config.btc.authType === 'cookie') {
+    invalidateCookieCache();
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: await getAuth(),
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: ++_id, method, params }),
+    });
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
