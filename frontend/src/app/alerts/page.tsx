@@ -190,6 +190,9 @@ export default function AlertsPage() {
       {/* ── Watchlist ─────────────────────────────────────────────────────── */}
       <section>
         <SectionTitle>Watchlist</SectionTitle>
+        <p className="text-xs text-mim-text-muted mb-4 -mt-2">
+          Add Bitcoin addresses to monitor. When a watched address appears in a new transaction (incoming or outgoing), an alert will fire.
+        </p>
 
         {/* Add form */}
         <div className="flex flex-wrap gap-2 mb-4">
@@ -251,6 +254,9 @@ export default function AlertsPage() {
             {showRuleForm ? '✕ Cancel' : '+ New Rule'}
           </button>
         </div>
+        <p className="text-xs text-mim-text-muted mb-4 -mt-2">
+          Rules trigger alerts based on on-chain events. Each rule type monitors a different signal from your node.
+        </p>
 
         {/* New rule form */}
         {showRuleForm && (
@@ -264,12 +270,23 @@ export default function AlertsPage() {
               >
                 {RULE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
               </select>
+              <p className="text-[11px] text-mim-text-dim mt-1.5">
+                {ruleForm.type === 'new_tx' && 'Fires when a transaction involving a specific address is seen in the mempool or confirmed in a block.'}
+                {ruleForm.type === 'balance_change' && 'Fires when a wallet balance changes by more than the threshold amount (in BTC).'}
+                {ruleForm.type === 'block' && 'Fires every time a new block is mined. Use condition to filter by size or tx count.'}
+                {ruleForm.type === 'fee_spike' && 'Fires when the estimated fee rate exceeds the threshold (in sat/vB).'}
+              </p>
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted block mb-1">Condition</label>
                 <FieldInput
-                  placeholder='e.g. "address = bc1q…"'
+                  placeholder={
+                    ruleForm.type === 'new_tx' ? 'address (e.g. tb1q…)' :
+                    ruleForm.type === 'balance_change' ? 'wallet name (e.g. default)' :
+                    ruleForm.type === 'block' ? 'optional: min_txs=100' :
+                    'leave empty for any fee spike'
+                  }
                   value={ruleForm.condition}
                   onChange={(e) => setRuleForm((f) => ({ ...f, condition: e.target.value }))}
                   className="w-full"
@@ -278,7 +295,11 @@ export default function AlertsPage() {
               <div className="w-36">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted block mb-1">Threshold</label>
                 <FieldInput
-                  placeholder="e.g. 0.01"
+                  placeholder={
+                    ruleForm.type === 'fee_spike' ? 'sat/vB (e.g. 50)' :
+                    ruleForm.type === 'balance_change' ? 'BTC (e.g. 0.01)' :
+                    'optional'
+                  }
                   value={ruleForm.threshold}
                   onChange={(e) => setRuleForm((f) => ({ ...f, threshold: e.target.value }))}
                   className="w-full"
@@ -343,7 +364,7 @@ export default function AlertsPage() {
         </div>
 
         {events.length === 0 ? (
-          <p className="text-xs text-mim-text-dim">No alerts fired yet.</p>
+          <p className="text-xs text-mim-text-dim">No alerts fired yet. Alerts appear here when rules or watched addresses are triggered by on-chain activity.</p>
         ) : (
           <div className="bg-mim-surface border border-mim-border rounded-xl overflow-hidden">
             {events.map((ev, i) => (

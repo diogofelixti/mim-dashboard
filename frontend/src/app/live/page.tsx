@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { api } from '@/lib/api';
 import { formatHash, formatBTC, formatTimeAgo, formatNumber } from '@/lib/formatters';
 
 type LiveBlock = {
@@ -13,6 +14,7 @@ type LiveBlock = {
   avgFeeRate: number;
   size: number;
   _uid: number;
+  live?: boolean;
 };
 
 type LiveTx = {
@@ -21,6 +23,7 @@ type LiveTx = {
   vsize: number;
   addresses: string[];
   _uid: number;
+  live?: boolean;
 };
 
 let _uid = 0;
@@ -38,19 +41,42 @@ export default function LivePage() {
 
   useEffect(() => { pausedRef.current = paused; }, [paused]);
 
+  // Load initial data (recent blocks + mempool txs)
+  useEffect(() => {
+    api<{ blocks: Omit<LiveBlock, '_uid' | 'live'>[] }>('/api/blocks?count=5')
+      .then((d) => {
+        setBlocks(d.blocks.map((b) => ({ ...b, _uid: ++_uid, live: false })));
+      })
+      .catch(() => {});
+
+    api<{ top: { txid: string; vsize: number }[] }>('/api/node/mempool')
+      .then((d) => {
+        const initial = d.top.slice(0, 30).map((t) => ({
+          txid: t.txid,
+          totalOutput: 0,
+          vsize: t.vsize,
+          addresses: [],
+          _uid: ++_uid,
+          live: false,
+        }));
+        setTxs(initial);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     const unsubBlock = subscribe('block', (raw) => {
       if (pausedRef.current) return;
-      const b = raw as Omit<LiveBlock, '_uid'>;
+      const b = raw as Omit<LiveBlock, '_uid' | 'live'>;
       setBlockCount((c) => c + 1);
-      setBlocks((prev) => [{ ...b, _uid: ++_uid }, ...prev].slice(0, 20));
+      setBlocks((prev) => [{ ...b, _uid: ++_uid, live: true }, ...prev].slice(0, 20));
     });
 
     const unsubTx = subscribe('tx', (raw) => {
       if (pausedRef.current) return;
-      const tx = raw as Omit<LiveTx, '_uid'>;
+      const tx = raw as Omit<LiveTx, '_uid' | 'live'>;
       setTxCount((c) => c + 1);
-      setTxs((prev) => [{ ...tx, _uid: ++_uid }, ...prev].slice(0, 50));
+      setTxs((prev) => [{ ...tx, _uid: ++_uid, live: true }, ...prev].slice(0, 50));
     });
 
     return () => { unsubBlock(); unsubTx(); };
@@ -112,12 +138,21 @@ export default function LivePage() {
               blocks.map((b) => (
                 <div
                   key={b._uid}
-                  className="animate-fade-in bg-mim-surface border border-mim-border rounded-xl p-3 space-y-2"
+                  className={`animate-fade-in bg-mim-surface border rounded-xl p-3 space-y-2 ${
+                    b.live ? 'border-bitcoin-orange/50' : 'border-mim-border'
+                  }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-bitcoin-orange">
-                      #{formatNumber(b.height)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-bitcoin-orange">
+                        #{formatNumber(b.height)}
+                      </span>
+                      {b.live && (
+                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-bitcoin-orange/15 text-bitcoin-orange">
+                          Live
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[10px] text-mim-text-muted">
                       {formatTimeAgo(b.time)}
                     </span>
@@ -150,8 +185,15 @@ export default function LivePage() {
               txs.map((tx) => (
                 <div
                   key={tx._uid}
-                  className="animate-fade-in bg-mim-surface border border-mim-border rounded-lg px-3 py-2 flex items-center gap-3 min-w-0"
+                  className={`animate-fade-in bg-mim-surface border rounded-lg px-3 py-2 flex items-center gap-3 min-w-0 ${
+                    tx.live ? 'border-bitcoin-orange/40' : 'border-mim-border'
+                  }`}
                 >
+                  {tx.live && (
+                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-bitcoin-orange/15 text-bitcoin-orange flex-shrink-0">
+                      Live
+                    </span>
+                  )}
                   <span className="text-hash flex-shrink-0 w-32">
                     {formatHash(tx.txid, 7)}
                   </span>

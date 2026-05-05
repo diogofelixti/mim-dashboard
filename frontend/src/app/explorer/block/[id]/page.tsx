@@ -13,6 +13,19 @@ import {
   formatDifficulty,
 } from '@/lib/formatters';
 
+function CopyBtn({ text }: { text: string }) {
+  const [ok, setOk] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setOk(true); setTimeout(() => setOk(false), 1200); }}
+      title="Copy"
+      className="text-mim-text-dim hover:text-mim-text transition-colors text-sm flex-shrink-0"
+    >
+      {ok ? '✓' : '⧉'}
+    </button>
+  );
+}
+
 type TxSummary = {
   txid: string;
   totalOutput: number;
@@ -74,9 +87,6 @@ export default function BlockDetailPage() {
     router.push(`/explorer/block/${target}`);
   }
 
-  function copyHash() {
-    if (block) navigator.clipboard.writeText(block.hash);
-  }
 
   if (loading) {
     return (
@@ -122,13 +132,7 @@ export default function BlockDetailPage() {
 
         <div className="flex items-center gap-2">
           <p className="text-hash font-mono text-xs break-all">{block.hash}</p>
-          <button
-            onClick={copyHash}
-            title="Copy hash"
-            className="flex-shrink-0 text-mim-text-dim hover:text-mim-text transition-colors text-sm"
-          >
-            ⧉
-          </button>
+          <CopyBtn text={block.hash} />
         </div>
       </div>
 
@@ -194,12 +198,15 @@ export default function BlockDetailPage() {
                   className="border-b border-mim-border last:border-0 hover:bg-mim-surface-2 transition-colors"
                 >
                   <td className="px-4 py-3">
-                    <Link
-                      href={`/explorer/tx/${tx.txid}?blockhash=${block.hash}`}
-                      className="text-hash hover:text-mim-text font-mono transition-colors"
-                    >
-                      {formatHash(tx.txid, 10)}
-                    </Link>
+                    <div className="flex items-center gap-1.5">
+                      <Link
+                        href={`/explorer/tx/${tx.txid}?blockhash=${block.hash}`}
+                        className="text-hash hover:text-mim-text font-mono transition-colors"
+                      >
+                        {formatHash(tx.txid, 10)}
+                      </Link>
+                      <CopyBtn text={tx.txid} />
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-right text-mim-text-muted font-mono">
                     {tx.numInputs}

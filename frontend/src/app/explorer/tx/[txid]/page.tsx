@@ -6,6 +6,19 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { formatHash, formatNumber, formatBytes } from '@/lib/formatters';
 
+function CopyBtn({ text }: { text: string }) {
+  const [ok, setOk] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setOk(true); setTimeout(() => setOk(false), 1200); }}
+      title="Copy"
+      className="text-mim-text-dim hover:text-mim-text transition-colors text-sm flex-shrink-0"
+    >
+      {ok ? '✓' : '⧉'}
+    </button>
+  );
+}
+
 type TxInput = {
   txid: string;
   vout: number;
@@ -45,7 +58,6 @@ function TxDetailContent() {
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState('');
   const [hexOpen,   setHexOpen]   = useState(false);
-  const [copied,    setCopied]    = useState(false);
 
   useEffect(() => {
     const blockhash = searchParams.get('blockhash');
@@ -56,11 +68,6 @@ function TxDetailContent() {
       .finally(() => setLoading(false));
   }, [txid, searchParams]);
 
-  function copyTxid() {
-    navigator.clipboard.writeText(txid);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
 
   if (loading) {
     return (
@@ -125,13 +132,7 @@ function TxDetailContent() {
 
         <div className="flex items-center gap-2">
           <p className="text-hash font-mono text-xs break-all">{txid}</p>
-          <button
-            onClick={copyTxid}
-            title="Copy txid"
-            className="flex-shrink-0 text-mim-text-dim hover:text-mim-text transition-colors text-sm"
-          >
-            {copied ? '✓' : '⧉'}
-          </button>
+          <CopyBtn text={txid} />
         </div>
       </div>
 

@@ -58,9 +58,7 @@ function SaveBtn({ loading, label = 'Save' }: { loading?: boolean; label?: strin
 function BitcoinConfEditor() {
   const [conf,    setConf]    = useState('');
   const [loading, setLoading] = useState(true);
-  const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
-  const [notice,  setNotice]  = useState('');
 
   useEffect(() => {
     api<{ conf: string }>('/api/settings/bitcoin-conf')
@@ -68,21 +66,6 @@ function BitcoinConfEditor() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      await api('/api/settings/bitcoin-conf', {
-        method: 'PUT',
-        body: JSON.stringify({ conf }),
-      });
-      setNotice('bitcoin.conf saved. Restart bitcoind to apply changes.');
-      setTimeout(() => setNotice(''), 5000);
-    } catch (ex: unknown) { setError((ex as Error).message); }
-    finally { setSaving(false); }
-  }
 
   // Simple keyword highlighting rendered as styled spans in a <pre> overlay
   function highlight(text: string) {
@@ -107,35 +90,25 @@ function BitcoinConfEditor() {
   }
 
   return (
-    <form onSubmit={handleSave} className="space-y-3">
-      {error  && <p className="text-mim-red  text-xs font-mono">{error}</p>}
-      {notice && <p className="text-mim-green text-xs font-mono">{notice}</p>}
+    <div className="space-y-3">
+      {error && <p className="text-mim-red text-xs font-mono">{error}</p>}
 
       {loading ? (
         <p className="text-xs text-mim-text-muted animate-pulse">Loading…</p>
       ) : (
-        <div className="relative">
-          {/* Highlighted overlay */}
-          <pre
-            aria-hidden
-            className="absolute inset-0 px-4 py-3 text-sm font-mono pointer-events-none overflow-hidden rounded-xl leading-relaxed"
-          >
+        <div className="bg-mim-surface border border-mim-border rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-mim-border bg-mim-bg">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">
+              bitcoin.conf
+            </span>
+            <span className="text-[10px] text-mim-text-dim">read-only (host mount)</span>
+          </div>
+          <pre className="px-4 py-3 text-sm font-mono leading-relaxed overflow-x-auto max-h-[500px] overflow-y-auto">
             {highlight(conf)}
           </pre>
-
-          {/* Actual textarea (transparent text so overlay shows) */}
-          <textarea
-            value={conf}
-            onChange={(e) => setConf(e.target.value)}
-            rows={20}
-            spellCheck={false}
-            className="relative w-full bg-mim-surface border border-mim-border rounded-xl px-4 py-3 text-sm font-mono text-transparent caret-mim-text focus:outline-none focus:border-bitcoin-orange/60 resize-y leading-relaxed"
-          />
         </div>
       )}
-
-      <SaveBtn loading={saving} label="Save bitcoin.conf" />
-    </form>
+    </div>
   );
 }
 

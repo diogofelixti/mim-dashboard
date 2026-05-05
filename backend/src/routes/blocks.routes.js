@@ -116,13 +116,13 @@ export async function setupBlockRoutes(fastify) {
           return reply.code(400).send({ error: 'Invalid txid' });
         }
 
-        // Try with optional blockhash for nodes without txindex
         const { blockhash } = request.query;
         let tx;
         try {
+          // Verbosity 2 includes prevout data for inputs
           tx = blockhash
-            ? await rpcCall('getrawtransaction', [txid, true, blockhash])
-            : await getRawTransaction(txid, true);
+            ? await rpcCall('getrawtransaction', [txid, 2, blockhash])
+            : await rpcCall('getrawtransaction', [txid, 2]);
         } catch (err) {
           if (err.code === -5) {
             return reply.code(404).send({
@@ -132,8 +132,29 @@ export async function setupBlockRoutes(fastify) {
           throw err;
         }
 
+        // Resolve input addresses: use prevout if available, otherwise look up source tx
+        const inputs = [];
+        for (const inp of tx.vin ?? []) {
+          if (!inp.txid) {
+            inputs.push({ txid: 'coinbase', vout: 0, address: 'Coinbase', value: 0 });
+            continue;
+          }
+          let address = inp.prevout?.scriptPubKey?.address ?? '';
+          let value = inp.prevout?.value ?? 0;
+          if (!address) {
+            try {
+              const srcTx = await getRawTransaction(inp.txid, true);
+              const srcOut = srcTx.vout?.[inp.vout];
+              if (srcOut) {
+                address = srcOut.scriptPubKey?.address ?? srcOut.scriptPubKey?.addresses?.[0] ?? '';
+                value = srcOut.value ?? 0;
+              }
+            } catch { /* source tx unavailable without txindex */ }
+          }
+          inputs.push({ txid: inp.txid, vout: inp.vout, address, value });
+        }
+
         const confirmed = Boolean(tx.blockhash);
-        const totalOut = (tx.vout ?? []).reduce((s, o) => s + (o.value ?? 0), 0);
         const fee = tx.fee ?? 0;
         const feeRate = tx.vsize ? Math.round((fee * 1e8) / tx.vsize) : 0;
 
@@ -150,12 +171,7 @@ export async function setupBlockRoutes(fastify) {
           fee,
           feeRate,
           hex: tx.hex,
-          inputs: (tx.vin ?? []).map((inp) => ({
-            txid: inp.txid ?? 'coinbase',
-            vout: inp.vout ?? 0,
-            address: inp.prevout?.scriptPubKey?.address ?? '',
-            value: inp.prevout?.value ?? 0,
-          })),
+          inputs,
           outputs: (tx.vout ?? []).map((out) => ({
             n: out.n,
             value: out.value ?? 0,
