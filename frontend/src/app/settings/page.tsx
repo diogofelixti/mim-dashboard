@@ -320,9 +320,9 @@ export default function SettingsPage() {
   const [section, setSection] = useState<Section>('conf');
 
   return (
-    <div className="flex gap-8 max-w-5xl">
+    <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 max-w-5xl">
       {/* Sidebar nav */}
-      <nav className="w-44 flex-shrink-0 space-y-1">
+      <nav className="w-full sm:w-44 flex-shrink-0 flex sm:flex-col gap-1 overflow-x-auto pb-2 sm:pb-0">
         {NAV.map(({ id, label }) => (
           <button
             key={id}

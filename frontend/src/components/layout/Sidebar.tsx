@@ -14,7 +14,12 @@ const NAV = [
   { href: '/settings',     label: 'Settings',     icon: '⚙️' },
 ];
 
-export default function Sidebar() {
+type Props = {
+  open: boolean;
+  onClose: () => void;
+};
+
+export default function Sidebar({ open, onClose }: Props) {
   const pathname = usePathname();
   const router   = useRouter();
 
@@ -23,26 +28,36 @@ export default function Sidebar() {
     router.replace('/login');
   }
 
-  return (
+  const sidebar = (
     <aside className="fixed left-0 top-0 h-screen w-56 flex flex-col bg-mim-surface border-r border-mim-border z-40">
 
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-mim-border">
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{
-            background: 'rgba(247,147,26,0.12)',
-            border: '1px solid rgba(247,147,26,0.35)',
-          }}
+      <div className="flex items-center justify-between px-5 py-5 border-b border-mim-border">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{
+              background: 'rgba(247,147,26,0.12)',
+              border: '1px solid rgba(247,147,26,0.35)',
+            }}
+          >
+            <span className="text-bitcoin-orange font-bold text-base leading-none">₿</span>
+          </div>
+          <div className="leading-tight">
+            <span className="font-semibold text-sm text-mim-text tracking-tight">MIM</span>
+            <span className="block text-[10px] text-mim-text-dim font-mono uppercase tracking-widest">
+              Dashboard
+            </span>
+          </div>
+        </div>
+        {/* Close button — mobile only */}
+        <button
+          onClick={onClose}
+          className="lg:hidden text-mim-text-muted hover:text-mim-text text-lg"
+          aria-label="Close menu"
         >
-          <span className="text-bitcoin-orange font-bold text-base leading-none">₿</span>
-        </div>
-        <div className="leading-tight">
-          <span className="font-semibold text-sm text-mim-text tracking-tight">MIM</span>
-          <span className="block text-[10px] text-mim-text-dim font-mono uppercase tracking-widest">
-            Dashboard
-          </span>
-        </div>
+          ✕
+        </button>
       </div>
 
       {/* Nav */}
@@ -53,6 +68,7 @@ export default function Sidebar() {
             <Link
               key={href}
               href={href}
+              onClick={onClose}
               className={`
                 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
                 transition-colors duration-100
@@ -84,5 +100,29 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+  );
+
+  return (
+    <>
+      {/* Desktop: always visible */}
+      <div className="hidden lg:block">
+        {sidebar}
+      </div>
+
+      {/* Mobile: drawer overlay */}
+      {open && (
+        <div className="lg:hidden">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[39] animate-fade-in"
+            onClick={onClose}
+          />
+          {/* Drawer */}
+          <div className="animate-slide-in-left">
+            {sidebar}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

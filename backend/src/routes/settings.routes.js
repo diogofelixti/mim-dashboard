@@ -158,6 +158,44 @@ export async function setupSettingsRoutes(fastify) {
     }
   });
 
+  // ── Onboarding ───────────────────────────────────────────────────────────────
+
+  fastify.get('/api/settings/onboarding', protect, async (request, reply) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT settings_json FROM preferences WHERE user_id = $1 LIMIT 1`,
+        [request.user.id]
+      );
+      const completed = rows[0]?.settings_json?.onboarding_completed === true;
+      return { completed };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  fastify.post('/api/settings/onboarding/complete', protect, async (request, reply) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT id FROM preferences WHERE user_id = $1 LIMIT 1`,
+        [request.user.id]
+      );
+      if (rows.length === 0) {
+        await pool.query(
+          `INSERT INTO preferences (user_id, settings_json) VALUES ($1, '{"onboarding_completed": true}')`,
+          [request.user.id]
+        );
+      } else {
+        await pool.query(
+          `UPDATE preferences SET settings_json = settings_json || '{"onboarding_completed": true}'::jsonb WHERE user_id = $1`,
+          [request.user.id]
+        );
+      }
+      return { success: true };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
   // ── Change password ──────────────────────────────────────────────────────────
   // Frontend sends { current, next } — maps to auth logic
 

@@ -1,9 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { formatHash, formatNumber } from '@/lib/formatters';
 
 type Tab = 'send' | 'broadcast' | 'decode';
+
+type SelectedUtxo = {
+  txid: string;
+  vout: number;
+  amount: number;
+  amount_sats: number;
+  address: string;
+  confirmations: number;
+};
 
 type SendForm = {
   to: string;
@@ -56,13 +66,40 @@ function Textarea({ className = '', ...props }: React.TextareaHTMLAttributes<HTM
 
 // ── Send Tab ──────────────────────────────────────────────────────────────────
 function SendTab() {
-  const [form,     setForm]     = useState<SendForm>({ to: '', amount: '', feeMode: 'auto', feeRate: '', wallet: '' });
-  const [sending,  setSending]  = useState(false);
-  const [result,   setResult]   = useState('');
-  const [error,    setError]    = useState('');
+  const [form,           setForm]           = useState<SendForm>({ to: '', amount: '', feeMode: 'auto', feeRate: '', wallet: '' });
+  const [sending,        setSending]        = useState(false);
+  const [result,         setResult]         = useState('');
+  const [error,          setError]          = useState('');
+  const [selectedUtxos,  setSelectedUtxos]  = useState<SelectedUtxo[]>([]);
+  const [coinWallet,     setCoinWallet]     = useState('');
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('mim-selected-utxos');
+      const wallet = localStorage.getItem('mim-coin-control-wallet') ?? '';
+      if (raw) {
+        const parsed = JSON.parse(raw) as SelectedUtxo[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSelectedUtxos(parsed);
+          setCoinWallet(wallet);
+          setForm((f) => ({ ...f, wallet: wallet }));
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const utxoTotal     = selectedUtxos.reduce((s, u) => s + u.amount, 0);
+  const utxoTotalSats = selectedUtxos.reduce((s, u) => s + u.amount_sats, 0);
 
   function set(key: keyof SendForm, val: string) {
     setForm((f) => ({ ...f, [key]: val }));
+  }
+
+  function clearCoinControl() {
+    setSelectedUtxos([]);
+    setCoinWallet('');
+    localStorage.removeItem('mim-selected-utxos');
+    localStorage.removeItem('mim-coin-control-wallet');
   }
 
   async function handleSend() {
@@ -71,24 +108,96 @@ function SendTab() {
     setResult('');
     setError('');
     try {
-      const payload: Record<string, unknown> = {
-        to: form.to.trim(),
-        amount: parseFloat(form.amount),
-      };
-      if (form.feeMode === 'manual' && form.feeRate) payload.feeRate = parseFloat(form.feeRate);
-      if (form.wallet) payload.wallet = form.wallet;
+      const wallet = coinWallet || form.wallet;
+      if (selectedUtxos.length > 0 && wallet) {
+        const payload: Record<string, unknown> = {
+          address: form.to.trim(),
+          amount: parseFloat(form.amount),
+          inputs: selectedUtxos.map((u) => ({ txid: u.txid, vout: u.vout })),
+        };
+        if (form.feeMode === 'manual' && form.feeRate) {
+          payload.fee_rate = parseFloat(form.feeRate);
+        }
 
-      const d = await api<{ txid: string }>('/api/tx/send', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      setResult(d.txid);
+        const d = await api<{ txid: string }>(
+          `/api/wallets/${encodeURIComponent(wallet)}/send`,
+          { method: 'POST', body: JSON.stringify(payload) }
+        );
+        setResult(d.txid);
+        clearCoinControl();
+      } else {
+        const payload: Record<string, unknown> = {
+          to: form.to.trim(),
+          amount: parseFloat(form.amount),
+        };
+        if (form.feeMode === 'manual' && form.feeRate) payload.feeRate = parseFloat(form.feeRate);
+        if (form.wallet) payload.wallet = form.wallet;
+
+        const d = await api<{ txid: string }>('/api/tx/send', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        setResult(d.txid);
+      }
     } catch (e: unknown) { setError((e as Error).message); }
     finally { setSending(false); }
   }
 
   return (
     <div className="space-y-4 max-w-lg">
+      {/* Coin Control Section */}
+      {selectedUtxos.length > 0 ? (
+        <div className="bg-bitcoin-orange/5 border border-bitcoin-orange/20 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-bitcoin-orange">
+              Coin Control — {selectedUtxos.length} UTXOs selected
+            </p>
+            <div className="flex gap-2">
+              <a
+                href="/wallets"
+                className="text-[10px] text-mim-text-muted hover:text-mim-text transition-colors"
+              >
+                Change Selection
+              </a>
+              <button
+                onClick={clearCoinControl}
+                className="text-[10px] text-mim-red hover:text-mim-red/80 transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1 max-h-32 overflow-y-auto">
+            {selectedUtxos.map((u) => (
+              <div key={`${u.txid}:${u.vout}`} className="flex items-center justify-between text-xs">
+                <span className="font-mono text-hash">{formatHash(u.txid, 8)}:{u.vout}</span>
+                <span className="font-mono text-mim-text">{u.amount.toFixed(8)} BTC</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t border-bitcoin-orange/10">
+            <span className="text-xs text-mim-text-muted">Available from selected UTXOs</span>
+            <span className="text-xs font-mono font-semibold text-bitcoin-orange">
+              {utxoTotal.toFixed(8)} BTC ({formatNumber(utxoTotalSats)} sats)
+            </span>
+          </div>
+          {coinWallet && (
+            <p className="text-[10px] text-mim-text-dim">
+              Wallet: <span className="font-semibold text-mim-text-muted">{coinWallet}</span>
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="bg-mim-surface border border-mim-border rounded-xl p-3">
+          <p className="text-xs text-mim-text-dim">
+            Automatic coin selection
+            <span className="ml-1 text-mim-text-muted">
+              — go to <a href="/wallets" className="text-bitcoin-orange hover:underline">Wallets → Coin Control</a> to select specific UTXOs
+            </span>
+          </p>
+        </div>
+      )}
+
       <div>
         <Label>Recipient address</Label>
         <Input
@@ -108,6 +217,11 @@ function SendTab() {
           value={form.amount}
           onChange={(e) => set('amount', e.target.value)}
         />
+        {selectedUtxos.length > 0 && form.amount && parseFloat(form.amount) > utxoTotal && (
+          <p className="text-mim-red text-[10px] mt-1">
+            Amount exceeds selected UTXOs total ({utxoTotal.toFixed(8)} BTC)
+          </p>
+        )}
       </div>
 
       <div>
@@ -139,18 +253,31 @@ function SendTab() {
         )}
       </div>
 
-      <div>
-        <Label>Wallet (optional)</Label>
-        <Input
-          placeholder="wallet name"
-          value={form.wallet}
-          onChange={(e) => set('wallet', e.target.value)}
-        />
-      </div>
+      {selectedUtxos.length === 0 && (
+        <div>
+          <Label>Wallet (optional)</Label>
+          <Input
+            placeholder="wallet name"
+            value={form.wallet}
+            onChange={(e) => set('wallet', e.target.value)}
+          />
+        </div>
+      )}
+
+      {selectedUtxos.length > 0 && (
+        <p className="text-xs text-mim-text-muted font-mono">
+          Using {selectedUtxos.length} selected UTXOs ({utxoTotal.toFixed(8)} BTC available)
+        </p>
+      )}
 
       <button
         onClick={handleSend}
-        disabled={sending || !form.to.trim() || !form.amount.trim()}
+        disabled={
+          sending ||
+          !form.to.trim() ||
+          !form.amount.trim() ||
+          (selectedUtxos.length > 0 && parseFloat(form.amount || '0') > utxoTotal)
+        }
         className="w-full py-3 rounded-xl bg-bitcoin-orange text-black font-semibold text-sm hover:bg-bitcoin-orange-dark disabled:opacity-50 transition-colors"
       >
         {sending ? 'Broadcasting…' : 'Send Transaction'}

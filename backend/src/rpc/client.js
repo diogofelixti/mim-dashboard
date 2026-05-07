@@ -127,6 +127,7 @@ export const walletProcessPsbt      = (wallet, psbt, sign = true) =>
 export const combinePsbt            = (psbts)               => rpcCall('combinepsbt', [psbts]);
 export const finalizePsbt           = (psbt, extract = true) => rpcCall('finalizepsbt', [psbt, extract]);
 export const decodePsbt             = (psbt)                => rpcCall('decodepsbt', [psbt]);
+export const analyzePsbt            = (psbt)                => rpcCall('analyzepsbt', [psbt]);
 export const sendToAddress          = (wallet, address, amount, comment = '') =>
   rpcCall('sendtoaddress', [address, amount, comment], wallet);
 

@@ -11,6 +11,7 @@ import {
   estimateSmartFee,
   rpcCall,
 } from '../rpc/client.js';
+import { pool } from '../db/migrate.js';
 
 const HEX64 = /^[0-9a-fA-F]{64}$/;
 
@@ -282,6 +283,109 @@ export async function setupBlockRoutes(fastify) {
         return { txid };
       } catch (err) {
         return reply.code(502).send({ error: err.message });
+      }
+    }
+  );
+
+  // ── TX Notes ───────────────────────────────────────────────────────────────
+
+  fastify.get(
+    '/api/tx/:txid/notes',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { txid } = request.params;
+      try {
+        const { rows } = await pool.query(
+          `SELECT id, txid, note, created_at FROM tx_notes
+            WHERE user_id = $1 AND txid = $2
+            ORDER BY created_at DESC`,
+          [request.user.id, txid]
+        );
+        return { notes: rows };
+      } catch (err) {
+        return reply.code(500).send({ error: err.message });
+      }
+    }
+  );
+
+  fastify.post(
+    '/api/tx/:txid/notes',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { txid } = request.params;
+      const { note } = request.body ?? {};
+      if (!note?.trim()) return reply.code(400).send({ error: 'note required' });
+      try {
+        const { rows } = await pool.query(
+          `INSERT INTO tx_notes (user_id, txid, note) VALUES ($1, $2, $3) RETURNING id, txid, note, created_at`,
+          [request.user.id, txid, note.trim()]
+        );
+        return rows[0];
+      } catch (err) {
+        return reply.code(500).send({ error: err.message });
+      }
+    }
+  );
+
+  fastify.delete(
+    '/api/tx/:txid/notes/:noteId',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { txid, noteId } = request.params;
+      try {
+        const { rowCount } = await pool.query(
+          `DELETE FROM tx_notes WHERE id = $1 AND user_id = $2 AND txid = $3`,
+          [noteId, request.user.id, txid]
+        );
+        if (rowCount === 0) return reply.code(404).send({ error: 'Note not found' });
+        return { success: true };
+      } catch (err) {
+        return reply.code(500).send({ error: err.message });
+      }
+    }
+  );
+
+  fastify.put(
+    '/api/tx/:txid/notes/:noteId',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { txid, noteId } = request.params;
+      const { note } = request.body ?? {};
+      if (!note?.trim()) return reply.code(400).send({ error: 'note required' });
+      try {
+        const { rows, rowCount } = await pool.query(
+          `UPDATE tx_notes SET note = $1 WHERE id = $2 AND user_id = $3 AND txid = $4 RETURNING id, txid, note, created_at`,
+          [note.trim(), noteId, request.user.id, txid]
+        );
+        if (rowCount === 0) return reply.code(404).send({ error: 'Note not found' });
+        return rows[0];
+      } catch (err) {
+        return reply.code(500).send({ error: err.message });
+      }
+    }
+  );
+
+  fastify.post(
+    '/api/tx/notes/batch',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { txids } = request.body ?? {};
+      if (!txids?.length) return { notes: {} };
+      try {
+        const { rows } = await pool.query(
+          `SELECT id, txid, note, created_at FROM tx_notes
+            WHERE user_id = $1 AND txid = ANY($2)
+            ORDER BY created_at DESC`,
+          [request.user.id, txids]
+        );
+        const grouped = {};
+        for (const row of rows) {
+          if (!grouped[row.txid]) grouped[row.txid] = [];
+          grouped[row.txid].push(row);
+        }
+        return { notes: grouped };
+      } catch (err) {
+        return reply.code(500).send({ error: err.message });
       }
     }
   );

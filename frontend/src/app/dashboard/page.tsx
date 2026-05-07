@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import {
@@ -11,6 +11,17 @@ import {
   formatUptime,
   formatDifficulty,
 } from '@/lib/formatters';
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Line,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend,
+} from 'recharts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -61,6 +72,25 @@ type LatestBlock = {
   totalFees?: number;
 };
 
+type FeeHistoryRow = {
+  id: number;
+  height: number;
+  recorded_at: string;
+  fast: number;
+  medium: number;
+  slow: number;
+  mempool_size: number;
+};
+
+type FeeRange = '6' | '24' | '48' | '168';
+
+const FEE_RANGES: { id: FeeRange; label: string }[] = [
+  { id: '6',   label: '6h' },
+  { id: '24',  label: '24h' },
+  { id: '48',  label: '2d' },
+  { id: '168', label: '7d' },
+];
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function Label({ children }: { children: React.ReactNode }) {
@@ -107,6 +137,200 @@ function Card({
       </h2>
       {children}
     </div>
+  );
+}
+
+// ── Fee History Chart ─────────────────────────────────────────────────────────
+
+function formatChartTime(ts: string, range: FeeRange) {
+  const d = new Date(ts);
+  if (range === '6' || range === '24') {
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function FeeHistoryChart() {
+  const [range,    setRange]    = useState<FeeRange>('24');
+  const [data,     setData]     = useState<FeeHistoryRow[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [showPool, setShowPool] = useState(true);
+
+  const fetchHistory = useCallback(async (hours: string) => {
+    setLoading(true);
+    try {
+      const rows = await api<FeeHistoryRow[]>(`/api/fees/history?hours=${hours}`);
+      setData(rows);
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    fetchHistory(range);
+  }, [range, fetchHistory]);
+
+  const chartData = useMemo(() => {
+    const step = data.length > 200 ? Math.ceil(data.length / 200) : 1;
+    return data
+      .filter((_, i) => i % step === 0 || i === data.length - 1)
+      .map((row) => ({
+        time:    formatChartTime(row.recorded_at, range),
+        rawTime: row.recorded_at,
+        fast:    Number(row.fast),
+        medium:  Number(row.medium),
+        slow:    Number(row.slow),
+        mempool: row.mempool_size,
+      }));
+  }, [data, range]);
+
+  const maxFee = useMemo(() => {
+    if (!chartData.length) return 100;
+    return Math.max(...chartData.map((d) => Math.max(d.fast, d.medium, d.slow))) * 1.15;
+  }, [chartData]);
+
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) => {
+    if (!active || !payload?.length) return null;
+    const row = chartData.find((d) => d.time === label);
+    return (
+      <div className="bg-mim-surface border border-mim-border rounded-lg p-3 shadow-lg">
+        <p className="text-[10px] text-mim-text-muted mb-1.5">
+          {row ? new Date(row.rawTime).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : label}
+        </p>
+        {payload.map((p) => (
+          <div key={p.name} className="flex items-center gap-2 text-xs">
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
+            <span className="text-mim-text-muted capitalize">{p.name}</span>
+            <span className="font-mono text-mim-text ml-auto">
+              {p.name === 'mempool' ? formatNumber(p.value) + ' txs' : p.value.toFixed(1) + ' sat/vB'}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <Card title="Fee History" accent="📈">
+      {/* Controls */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1">
+          {FEE_RANGES.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => setRange(r.id)}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-colors ${
+                range === r.id
+                  ? 'bg-bitcoin-orange text-black border-bitcoin-orange'
+                  : 'border-mim-border text-mim-text-muted hover:border-mim-border-light'
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showPool}
+            onChange={(e) => setShowPool(e.target.checked)}
+            className="accent-bitcoin-orange w-3 h-3"
+          />
+          <span className="text-[10px] text-mim-text-muted">Mempool</span>
+        </label>
+      </div>
+
+      {/* Chart */}
+      {loading ? (
+        <div className="h-52 flex items-center justify-center">
+          <span className="text-xs text-mim-text-muted animate-pulse">Loading fee data…</span>
+        </div>
+      ) : chartData.length < 2 ? (
+        <div className="h-52 flex items-center justify-center">
+          <span className="text-xs text-mim-text-dim">Not enough data yet. Fees are recorded every 5 minutes.</span>
+        </div>
+      ) : (
+        <div className="h-52 -mx-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -12 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2A2A3A" vertical={false} />
+              <XAxis
+                dataKey="time"
+                tick={{ fontSize: 9, fill: '#5A5A70' }}
+                tickLine={false}
+                axisLine={{ stroke: '#2A2A3A' }}
+                interval="preserveStartEnd"
+                minTickGap={40}
+              />
+              <YAxis
+                yAxisId="fee"
+                tick={{ fontSize: 9, fill: '#5A5A70' }}
+                tickLine={false}
+                axisLine={false}
+                domain={[0, maxFee]}
+                tickFormatter={(v: number) => `${Math.round(v)}`}
+              />
+              {showPool && (
+                <YAxis
+                  yAxisId="mempool"
+                  orientation="right"
+                  tick={{ fontSize: 9, fill: '#5A5A70' }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`}
+                />
+              )}
+              <Tooltip content={<CustomTooltip />} />
+              <Legend
+                wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
+                iconType="circle"
+                iconSize={6}
+              />
+              {showPool && (
+                <Area
+                  yAxisId="mempool"
+                  type="monotone"
+                  dataKey="mempool"
+                  fill="#3B82F6"
+                  fillOpacity={0.06}
+                  stroke="#3B82F6"
+                  strokeWidth={1}
+                  strokeOpacity={0.3}
+                  name="mempool"
+                  dot={false}
+                />
+              )}
+              <Line
+                yAxisId="fee"
+                type="monotone"
+                dataKey="fast"
+                stroke="#EF4444"
+                strokeWidth={2}
+                dot={false}
+                name="fast"
+              />
+              <Line
+                yAxisId="fee"
+                type="monotone"
+                dataKey="medium"
+                stroke="#EAB308"
+                strokeWidth={2}
+                dot={false}
+                name="medium"
+              />
+              <Line
+                yAxisId="fee"
+                type="monotone"
+                dataKey="slow"
+                stroke="#22C55E"
+                strokeWidth={2}
+                dot={false}
+                name="slow"
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -201,7 +425,7 @@ export default function DashboardPage() {
         <div className="flex items-end justify-between">
           <div>
             <Label>Height</Label>
-            <BigValue>{formatNumber(bc?.blocks ?? 0)}</BigValue>
+            <BigValue>{bc?.blocks ?? 0}</BigValue>
           </div>
           <span
             className={`text-xs px-2 py-0.5 rounded-full font-mono font-semibold ${
@@ -323,7 +547,7 @@ export default function DashboardPage() {
               <div>
                 <Label>Height</Label>
                 <BigValue className="text-bitcoin-orange">
-                  #{formatNumber(latestBlock.height)}
+                  #{latestBlock.height}
                 </BigValue>
               </div>
               <span className="text-xs text-mim-text-muted font-mono">
@@ -346,6 +570,11 @@ export default function DashboardPage() {
           <p className="text-xs text-mim-text-muted">Waiting for block data…</p>
         )}
       </Card>
+
+      {/* Fee History Chart — spans full width */}
+      <div className="col-span-1 md:col-span-2 xl:col-span-3">
+        <FeeHistoryChart />
+      </div>
 
     </div>
   );

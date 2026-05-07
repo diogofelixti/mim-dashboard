@@ -116,14 +116,14 @@ export default function BlockDetailPage() {
           Explorer
         </Link>
         <span>/</span>
-        <span className="text-mim-text">Block {formatNumber(block.height)}</span>
+        <span className="text-mim-text">Block {block.height}</span>
       </div>
 
       {/* Header */}
       <div className="space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl font-bold font-mono text-bitcoin-orange">
-            #{formatNumber(block.height)}
+            #{block.height}
           </h1>
           <span className="text-xs text-mim-text-muted">
             {formatTime(block.time)} · {formatTimeAgo(block.time)}
@@ -148,19 +148,21 @@ export default function BlockDetailPage() {
 
       {/* Navigation */}
       <div className="flex items-center gap-2">
-        <button
-          onClick={() => navigate(block.prevHash)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-mim-border text-xs text-mim-text-muted hover:border-mim-border-light hover:text-mim-text transition-colors"
-        >
-          ← Previous block
-        </button>
+        {block.height > 0 && (
+          <button
+            onClick={() => navigate(block.height - 1)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-mim-border text-xs text-mim-text-muted hover:border-mim-border-light hover:text-mim-text transition-colors"
+          >
+            ← Block {block.height - 1}
+          </button>
+        )}
 
         {block.nextHash ? (
           <button
-            onClick={() => navigate(block.nextHash!)}
+            onClick={() => navigate(block.height + 1)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-mim-border text-xs text-mim-text-muted hover:border-mim-border-light hover:text-mim-text transition-colors"
           >
-            Next block →
+            Block {block.height + 1} →
           </button>
         ) : (
           <span className="px-3 py-2 text-xs text-mim-text-dim">
@@ -175,8 +177,8 @@ export default function BlockDetailPage() {
           Transactions ({formatNumber(block.nTx)})
         </h2>
 
-        <div className="bg-mim-surface border border-mim-border rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-mim-surface border border-mim-border rounded-xl overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
             <thead>
               <tr className="border-b border-mim-border">
                 {['Txid', 'Inputs', 'Outputs', 'Output BTC', 'vSize', 'Fee'].map((h, i) => (

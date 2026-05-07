@@ -132,4 +132,93 @@ export async function setupNodeRoutes(fastify) {
       }
     }
   );
+
+  fastify.get(
+    '/api/node/health',
+    { preHandler: [fastify.authenticate] },
+    async (_req, reply) => {
+      try {
+        const [blockchain, network, mempool] = await Promise.all([
+          getBlockchainInfo(),
+          getNetworkInfo(),
+          getMempoolInfo(),
+        ]);
+
+        const syncProgress = blockchain.verificationprogress ?? 0;
+        const synced       = syncProgress >= 0.999;
+        const syncing      = syncProgress >= 0.5 && !synced;
+        const headerGap    = (blockchain.headers ?? 0) - (blockchain.blocks ?? 0);
+
+        const peers    = network.connections ?? 0;
+        const peersIn  = network.connections_in ?? 0;
+        const peersOut = network.connections_out ?? 0;
+
+        const mempoolSize = mempool.size ?? 0;
+        const mempoolBytes = mempool.bytes ?? 0;
+        const mempoolMaxMB = 300;
+        const mempoolUsagePct = mempoolBytes / (mempoolMaxMB * 1e6) * 100;
+
+        const checks = {
+          sync: {
+            status: synced ? 'green' : syncing ? 'yellow' : 'red',
+            progress: Math.min(syncProgress * 100, 100),
+            blocks: blockchain.blocks,
+            headers: blockchain.headers,
+            headerGap,
+            label: synced
+              ? 'Fully synced'
+              : syncing
+                ? `Syncing (${(syncProgress * 100).toFixed(2)}%)`
+                : `Stalled or starting (${(syncProgress * 100).toFixed(2)}%)`,
+          },
+          peers: {
+            status: peers >= 3 ? 'green' : peers >= 1 ? 'yellow' : 'red',
+            total: peers,
+            inbound: peersIn,
+            outbound: peersOut,
+            label: peers === 0
+              ? 'No peers connected'
+              : peers < 3
+                ? `Low peers (${peers})`
+                : `${peers} peers`,
+          },
+          mempool: {
+            status: mempoolUsagePct < 70 ? 'green' : mempoolUsagePct < 90 ? 'yellow' : 'red',
+            txCount: mempoolSize,
+            bytes: mempoolBytes,
+            usagePct: Math.round(mempoolUsagePct),
+            label: mempoolUsagePct >= 90
+              ? `Mempool congested (${Math.round(mempoolUsagePct)}%)`
+              : `${mempoolSize.toLocaleString()} txs`,
+          },
+        };
+
+        const statuses = [checks.sync.status, checks.peers.status, checks.mempool.status];
+        let overall = 'green';
+        if (statuses.includes('red')) overall = 'red';
+        else if (statuses.includes('yellow')) overall = 'yellow';
+
+        const summaryParts = [];
+        if (checks.sync.status !== 'green') summaryParts.push(checks.sync.label);
+        if (checks.peers.status !== 'green') summaryParts.push(checks.peers.label);
+        if (checks.mempool.status !== 'green') summaryParts.push(checks.mempool.label);
+
+        return {
+          status: overall,
+          summary: summaryParts.length ? summaryParts.join(' · ') : 'All systems healthy',
+          checks,
+        };
+      } catch (err) {
+        return {
+          status: 'red',
+          summary: 'Node unreachable',
+          checks: {
+            sync:    { status: 'red', progress: 0, blocks: 0, headers: 0, headerGap: 0, label: 'Unreachable' },
+            peers:   { status: 'red', total: 0, inbound: 0, outbound: 0, label: 'Unreachable' },
+            mempool: { status: 'red', txCount: 0, bytes: 0, usagePct: 0, label: 'Unreachable' },
+          },
+        };
+      }
+    }
+  );
 }

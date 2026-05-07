@@ -114,8 +114,8 @@ function ExplorerContent() {
         {loading ? (
           <p className="text-xs text-mim-text-muted animate-pulse">Loading…</p>
         ) : (
-          <div className="bg-mim-surface border border-mim-border rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-mim-surface border border-mim-border rounded-xl overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
               <thead>
                 <tr className="border-b border-mim-border">
                   {['Height', 'Hash', 'Txs', 'Size', 'Fees', 'Time'].map((h, i) => (
@@ -139,7 +139,7 @@ function ExplorerContent() {
                         href={`/explorer/block/${b.height}`}
                         className="font-mono font-bold text-bitcoin-orange hover:underline"
                       >
-                        {formatNumber(b.height)}
+                        {b.height}
                       </Link>
                     </td>
                     <td className="px-4 py-3">

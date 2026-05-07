@@ -145,7 +145,7 @@ export default function LivePage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-bitcoin-orange">
-                        #{formatNumber(b.height)}
+                        #{b.height}
                       </span>
                       {b.live && (
                         <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-bitcoin-orange/15 text-bitcoin-orange">

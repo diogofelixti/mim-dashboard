@@ -1,4 +1,5 @@
 import path from 'path';
+import fs from 'fs';
 import {
   listWallets,
   listWalletDir,
@@ -19,6 +20,8 @@ import {
   combinePsbt,
   finalizePsbt,
   decodePsbt,
+  analyzePsbt,
+  sendRawTransaction,
   rpcCall,
 } from '../rpc/client.js';
 
@@ -167,10 +170,29 @@ export async function setupWalletRoutes(fastify) {
   fastify.get('/api/wallets/:name/utxos', protect, async (request, reply) => {
     const { name } = request.params;
     try {
-      const utxos = await listUnspent(name);
-      const shaped = utxos.map((u) => ({ ...u, locked: false }));
-      const total = utxos.reduce((sum, u) => sum + u.amount, 0);
-      return { count: shaped.length, total, utxos: shaped };
+      const [utxos, lockedList] = await Promise.all([
+        listUnspent(name),
+        listLockUnspent(name),
+      ]);
+      const lockedSet = new Set(lockedList.map((l) => `${l.txid}:${l.vout}`));
+      const shaped = utxos
+        .map((u) => ({
+          txid:          u.txid,
+          vout:          u.vout,
+          address:       u.address,
+          label:         u.label ?? '',
+          amount:        u.amount,
+          amount_sats:   Math.round(u.amount * 1e8),
+          confirmations: u.confirmations,
+          spendable:     u.spendable ?? true,
+          solvable:      u.solvable ?? true,
+          safe:          u.safe ?? true,
+          locked:        lockedSet.has(`${u.txid}:${u.vout}`),
+        }))
+        .sort((a, b) => b.confirmations - a.confirmations);
+      const total_btc  = shaped.reduce((s, u) => s + u.amount, 0);
+      const total_sats = shaped.reduce((s, u) => s + u.amount_sats, 0);
+      return { count: shaped.length, total_btc, total_sats, utxos: shaped };
     } catch (err) {
       return reply.code(502).send({ error: err.message });
     }
@@ -216,11 +238,19 @@ export async function setupWalletRoutes(fastify) {
 
   fastify.post('/api/wallets/:name/backup', protect, async (request, reply) => {
     const { name } = request.params;
-    const filename = `wallet-${name}-${Date.now()}.dat`;
-    const dest = path.join('/tmp', filename);
+    const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '_') || 'default';
+    const filename = `wallet-${safeName}-${Date.now()}.dat`;
+    const hostPath = path.join('/tmp', filename);
+    const containerPath = path.join('/host-fs/tmp', filename);
     try {
-      await backupWallet(name, dest);
-      return { path: dest, filename };
+      await backupWallet(name, hostPath);
+      const stat = fs.statSync(containerPath);
+      const stream = fs.createReadStream(containerPath);
+      reply
+        .header('Content-Type', 'application/octet-stream')
+        .header('Content-Disposition', `attachment; filename="${filename}"`)
+        .header('Content-Length', stat.size);
+      return reply.send(stream);
     } catch (err) {
       return reply.code(502).send({ error: err.message });
     }
@@ -228,11 +258,25 @@ export async function setupWalletRoutes(fastify) {
 
   fastify.post('/api/wallets/:name/send', protect, async (request, reply) => {
     const { name } = request.params;
-    const { address, amount, comment = '' } = request.body ?? {};
+    const { address, amount, comment = '', inputs, fee_rate, replaceable } = request.body ?? {};
     if (!address || amount == null) {
       return reply.code(400).send({ error: 'address and amount required' });
     }
     try {
+      if (inputs && inputs.length > 0) {
+        const outputs = [{ [address]: parseFloat(amount) }];
+        const opts = {};
+        if (fee_rate != null) opts.fee_rate = parseFloat(fee_rate);
+        if (replaceable != null) opts.replaceable = replaceable;
+        const funded = await walletCreateFundedPsbt(name, inputs, outputs, opts);
+        const signed = await walletProcessPsbt(name, funded.psbt, true);
+        if (!signed.complete) {
+          return reply.code(400).send({ error: 'Could not fully sign transaction. Missing keys?' });
+        }
+        const finalized = await finalizePsbt(signed.psbt, true);
+        const txid = await sendRawTransaction(finalized.hex);
+        return { txid };
+      }
       const txid = await sendToAddress(name, address, amount, comment);
       return { txid };
     } catch (err) {
@@ -313,6 +357,16 @@ export async function setupWalletRoutes(fastify) {
     if (!psbt) return reply.code(400).send({ error: 'psbt required' });
     try {
       return await decodePsbt(psbt);
+    } catch (err) {
+      return reply.code(502).send({ error: err.message });
+    }
+  });
+
+  fastify.post('/api/psbt/analyze', protect, async (request, reply) => {
+    const { psbt } = request.body ?? {};
+    if (!psbt) return reply.code(400).send({ error: 'psbt required' });
+    try {
+      return await analyzePsbt(psbt);
     } catch (err) {
       return reply.code(502).send({ error: err.message });
     }
