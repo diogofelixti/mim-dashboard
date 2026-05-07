@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { formatTimeAgo, formatHash } from '@/lib/formatters';
+import { usePreferences } from '@/hooks/usePreferences';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type WatchEntry = {
@@ -29,11 +30,11 @@ type AlertEvent = {
   read: boolean;
 };
 
-const RULE_TYPES: { id: AlertRule['type']; label: string }[] = [
-  { id: 'new_tx',        label: 'New Transaction (address)' },
-  { id: 'balance_change',label: 'Balance Change' },
-  { id: 'block',         label: 'New Block' },
-  { id: 'fee_spike',     label: 'Fee Spike' },
+const RULE_TYPE_KEYS: { id: AlertRule['type']; i18nKey: string }[] = [
+  { id: 'new_tx',        i18nKey: 'alerts.newTx' },
+  { id: 'balance_change',i18nKey: 'alerts.balanceChange' },
+  { id: 'block',         i18nKey: 'alerts.newBlock' },
+  { id: 'fee_spike',     i18nKey: 'alerts.feeSpike' },
 ];
 
 // ── Small UI ──────────────────────────────────────────────────────────────────
@@ -76,6 +77,7 @@ function FieldInput({ className = '', ...props }: React.InputHTMLAttributes<HTML
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function AlertsPage() {
+  const { t } = usePreferences();
   const [watchlist,  setWatchlist]  = useState<WatchEntry[]>([]);
   const [rules,      setRules]      = useState<AlertRule[]>([]);
   const [events,     setEvents]     = useState<AlertEvent[]>([]);
@@ -189,21 +191,21 @@ export default function AlertsPage() {
 
       {/* ── Watchlist ─────────────────────────────────────────────────────── */}
       <section>
-        <SectionTitle>Watchlist</SectionTitle>
+        <SectionTitle>{t('alerts.watchlist')}</SectionTitle>
         <p className="text-xs text-mim-text-muted mb-4 -mt-2">
-          Add Bitcoin addresses to monitor. When a watched address appears in a new transaction (incoming or outgoing), an alert will fire.
+          {t('alerts.watchlistDesc')}
         </p>
 
         {/* Add form */}
         <div className="flex flex-wrap gap-2 mb-4">
           <FieldInput
-            placeholder="Bitcoin address…"
+            placeholder={t('alerts.addressPlaceholder')}
             value={newAddress}
             onChange={(e) => setNewAddress(e.target.value)}
             className="flex-1 min-w-48"
           />
           <FieldInput
-            placeholder="Label (optional)"
+            placeholder={t('alerts.labelOptional')}
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             className="w-40"
@@ -213,12 +215,12 @@ export default function AlertsPage() {
             disabled={addingWatch || !newAddress.trim()}
             className="px-4 py-2 rounded-lg bg-bitcoin-orange text-black text-xs font-semibold hover:bg-bitcoin-orange-dark disabled:opacity-50 transition-colors"
           >
-            {addingWatch ? '…' : '+ Watch'}
+            {addingWatch ? '…' : t('alerts.watch')}
           </button>
         </div>
 
         {watchlist.length === 0 ? (
-          <p className="text-xs text-mim-text-dim">No addresses in watchlist.</p>
+          <p className="text-xs text-mim-text-dim">{t('alerts.noAddresses')}</p>
         ) : (
           <div className="bg-mim-surface border border-mim-border rounded-xl overflow-hidden">
             {watchlist.map((w, i) => (
@@ -246,40 +248,40 @@ export default function AlertsPage() {
       {/* ── Alert Rules ───────────────────────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-4">
-          <SectionTitle>Alert Rules</SectionTitle>
+          <SectionTitle>{t('alerts.rules')}</SectionTitle>
           <button
             onClick={() => setShowRuleForm((v) => !v)}
             className="text-xs text-bitcoin-orange hover:underline"
           >
-            {showRuleForm ? '✕ Cancel' : '+ New Rule'}
+            {showRuleForm ? t('alerts.cancelRule') : t('alerts.newRule')}
           </button>
         </div>
         <p className="text-xs text-mim-text-muted mb-4 -mt-2">
-          Rules trigger alerts based on on-chain events. Each rule type monitors a different signal from your node.
+          {t('alerts.rulesDesc')}
         </p>
 
         {/* New rule form */}
         {showRuleForm && (
           <div className="bg-mim-surface border border-mim-border rounded-xl p-4 mb-4 space-y-3">
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted block mb-1">Type</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted block mb-1">{t('alerts.type')}</label>
               <select
                 value={ruleForm.type}
                 onChange={(e) => setRuleForm((f) => ({ ...f, type: e.target.value as AlertRule['type'] }))}
                 className="bg-mim-bg border border-mim-border text-mim-text text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-bitcoin-orange/60"
               >
-                {RULE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                {RULE_TYPE_KEYS.map((rt) => <option key={rt.id} value={rt.id}>{t(rt.i18nKey)}</option>)}
               </select>
               <p className="text-[11px] text-mim-text-dim mt-1.5">
-                {ruleForm.type === 'new_tx' && 'Fires when a transaction involving a specific address is seen in the mempool or confirmed in a block.'}
-                {ruleForm.type === 'balance_change' && 'Fires when a wallet balance changes by more than the threshold amount (in BTC).'}
-                {ruleForm.type === 'block' && 'Fires every time a new block is mined. Use condition to filter by size or tx count.'}
-                {ruleForm.type === 'fee_spike' && 'Fires when the estimated fee rate exceeds the threshold (in sat/vB).'}
+                {ruleForm.type === 'new_tx' && t('alerts.newTxDesc')}
+                {ruleForm.type === 'balance_change' && t('alerts.balanceChangeDesc')}
+                {ruleForm.type === 'block' && t('alerts.blockDesc')}
+                {ruleForm.type === 'fee_spike' && t('alerts.feeSpikeDesc')}
               </p>
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted block mb-1">Condition</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted block mb-1">{t('alerts.condition')}</label>
                 <FieldInput
                   placeholder={
                     ruleForm.type === 'new_tx' ? 'address (e.g. tb1q…)' :
@@ -293,7 +295,7 @@ export default function AlertsPage() {
                 />
               </div>
               <div className="w-36">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted block mb-1">Threshold</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted block mb-1">{t('alerts.threshold')}</label>
                 <FieldInput
                   placeholder={
                     ruleForm.type === 'fee_spike' ? 'sat/vB (e.g. 50)' :
@@ -312,24 +314,25 @@ export default function AlertsPage() {
                 disabled={savingRule}
                 className="px-4 py-2 rounded-lg bg-bitcoin-orange text-black text-xs font-semibold hover:bg-bitcoin-orange-dark disabled:opacity-50 transition-colors"
               >
-                {savingRule ? 'Saving…' : 'Save Rule'}
+                {savingRule ? t('alerts.saving') : t('alerts.saveRule')}
               </button>
               <button
                 onClick={() => setShowRuleForm(false)}
                 className="px-4 py-2 rounded-lg border border-mim-border text-mim-text-muted text-xs hover:border-mim-border-light transition-colors"
               >
-                Cancel
+                {t('alerts.cancel')}
               </button>
             </div>
           </div>
         )}
 
         {rules.length === 0 ? (
-          <p className="text-xs text-mim-text-dim">No rules configured.</p>
+          <p className="text-xs text-mim-text-dim">{t('alerts.noRules')}</p>
         ) : (
           <div className="bg-mim-surface border border-mim-border rounded-xl overflow-hidden">
             {rules.map((r, i) => {
-              const typeLabel = RULE_TYPES.find((t) => t.id === r.type)?.label ?? r.type;
+              const typeKey = RULE_TYPE_KEYS.find((rt) => rt.id === r.type);
+              const typeLabel = typeKey ? t(typeKey.i18nKey) : r.type;
               return (
                 <div
                   key={r.id}
@@ -352,19 +355,19 @@ export default function AlertsPage() {
       {/* ── Alert History ─────────────────────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between">
-          <SectionTitle badge={unread}>Alert History</SectionTitle>
+          <SectionTitle badge={unread}>{t('alerts.history')}</SectionTitle>
           {unread > 0 && (
             <button
               onClick={handleMarkAllRead}
               className="text-xs text-mim-text-muted hover:text-mim-text transition-colors mb-4"
             >
-              Mark all read
+              {t('alerts.markAllRead')}
             </button>
           )}
         </div>
 
         {events.length === 0 ? (
-          <p className="text-xs text-mim-text-dim">No alerts fired yet. Alerts appear here when rules or watched addresses are triggered by on-chain activity.</p>
+          <p className="text-xs text-mim-text-dim">{t('alerts.noAlerts')}</p>
         ) : (
           <div className="bg-mim-surface border border-mim-border rounded-xl overflow-hidden">
             {events.map((ev, i) => (

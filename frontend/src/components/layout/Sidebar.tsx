@@ -3,15 +3,16 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearToken } from '@/lib/api';
+import { usePreferences } from '@/hooks/usePreferences';
 
 const NAV = [
-  { href: '/dashboard',    label: 'Dashboard',    icon: '📊' },
-  { href: '/live',         label: 'Live Feed',    icon: '⚡' },
-  { href: '/explorer',     label: 'Explorer',     icon: '🔍' },
-  { href: '/wallets',      label: 'Wallets',      icon: '💰' },
-  { href: '/transactions', label: 'Transactions', icon: '📤' },
-  { href: '/alerts',       label: 'Alerts',       icon: '🔔' },
-  { href: '/settings',     label: 'Settings',     icon: '⚙️' },
+  { href: '/dashboard',    i18nKey: 'nav.dashboard',     icon: '📊' },
+  { href: '/live',         i18nKey: 'nav.live',          icon: '⚡' },
+  { href: '/explorer',     i18nKey: 'nav.explorer',      icon: '🔍' },
+  { href: '/wallets',      i18nKey: 'nav.wallets',       icon: '💰' },
+  { href: '/transactions', i18nKey: 'nav.transactions',  icon: '📤' },
+  { href: '/alerts',       i18nKey: 'nav.alerts',        icon: '🔔' },
+  { href: '/settings',     i18nKey: 'nav.settings',      icon: '⚙️' },
 ];
 
 type Props = {
@@ -22,6 +23,7 @@ type Props = {
 export default function Sidebar({ open, onClose }: Props) {
   const pathname = usePathname();
   const router   = useRouter();
+  const { t }    = usePreferences();
 
   function handleLogout() {
     clearToken();
@@ -62,7 +64,7 @@ export default function Sidebar({ open, onClose }: Props) {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV.map(({ href, label, icon }) => {
+        {NAV.map(({ href, i18nKey, icon }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
           return (
             <Link
@@ -79,7 +81,7 @@ export default function Sidebar({ open, onClose }: Props) {
               `}
             >
               <span className="text-base w-5 text-center flex-shrink-0">{icon}</span>
-              {label}
+              {t(i18nKey)}
             </Link>
           );
         })}
@@ -96,7 +98,7 @@ export default function Sidebar({ open, onClose }: Props) {
           "
         >
           <span className="text-base w-5 text-center flex-shrink-0">🚪</span>
-          Logout
+          {t('nav.logout')}
         </button>
       </div>
     </aside>

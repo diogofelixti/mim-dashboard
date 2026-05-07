@@ -2,16 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { translate, type Lang } from '@/lib/i18n';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 const STEPS = [
-  { id: 1, label: 'Welcome' },
-  { id: 2, label: 'Detect' },
-  { id: 3, label: 'RPC' },
-  { id: 4, label: 'ZMQ' },
-  { id: 5, label: 'Password' },
-  { id: 6, label: 'Launch' },
+  { id: 1, i18nKey: 'setup.step.welcome' },
+  { id: 2, i18nKey: 'setup.step.detect' },
+  { id: 3, i18nKey: 'setup.step.rpc' },
+  { id: 4, i18nKey: 'setup.step.zmq' },
+  { id: 5, i18nKey: 'setup.step.password' },
+  { id: 6, i18nKey: 'setup.step.launch' },
 ];
 
 type Network  = 'mainnet' | 'signet' | 'testnet';
@@ -58,11 +59,13 @@ interface Form {
   skipZmq:         boolean;
   password:        string;
   passwordConfirm: string;
+  btcUnit:         'BTC' | 'sats';
+  language:        Lang;
 }
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 
-function ProgressBar({ step }: { step: number }) {
+function ProgressBar({ step, t }: { step: number; t: (key: string) => string }) {
   return (
     <div className="w-full mb-10">
       <div className="flex items-center justify-between relative">
@@ -85,7 +88,7 @@ function ProgressBar({ step }: { step: number }) {
                 {done ? '✓' : s.id}
               </div>
               <span className={`text-[10px] font-mono hidden sm:block ${active ? 'text-bitcoin-orange' : 'text-mim-text-muted'}`}>
-                {s.label}
+                {t(s.i18nKey)}
               </span>
             </div>
           );
@@ -265,7 +268,11 @@ export default function SetupPage() {
     skipZmq:         false,
     password:        '',
     passwordConfirm: '',
+    btcUnit:         'BTC',
+    language:        'en',
   });
+
+  const t = (key: string, params?: Record<string, string | number>) => translate(form.language, key, params);
 
   const patch = (u: Partial<Form>) => setForm((f) => ({ ...f, ...u }));
 
@@ -366,7 +373,10 @@ export default function SetupPage() {
         authType:   form.authMode,
         btcNetwork: form.btcNetwork,
         password:   form.password,
+        btcUnit:    form.btcUnit,
+        language:   form.language,
       };
+      localStorage.setItem('mim-language', form.language);
       if (!form.skipZmq) {
         body.zmqBlockUrl  = form.zmqBlockUrl;
         body.zmqTxUrl     = form.zmqTxUrl;
@@ -418,34 +428,41 @@ export default function SetupPage() {
                style={{ background: 'linear-gradient(135deg, #1A1A25 0%, #12121A 100%)', border: '1px solid rgba(247,147,26,0.4)' }}>
             <span className="text-2xl font-bold text-bitcoin-orange">₿</span>
           </div>
-          <h1 className="text-xl font-semibold text-mim-text">MIM-Dashboard Setup</h1>
+          <h1 className="text-xl font-semibold text-mim-text">{t('setup.title')}</h1>
         </div>
 
-        <ProgressBar step={step} />
+        <ProgressBar step={step} t={t} />
 
         {/* ── Step 1: Welcome ── */}
         {step === 1 && (
           <Card>
-            <h2 className="text-lg font-semibold text-mim-text mb-2">Welcome</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-mim-text">{t('setup.welcome.title')}</h2>
+              <PillGroup<Lang>
+                options={['en', 'pt']}
+                value={form.language}
+                onChange={(v) => patch({ language: v })}
+                labels={{ en: 'English', pt: 'Português' }}
+              />
+            </div>
             <p className="text-sm text-mim-text-muted mb-6 leading-relaxed">
-              This wizard will connect MIM-Dashboard to your Bitcoin Core node.
-              Your system will be scanned automatically to detect installed nodes.
+              {t('setup.welcome.desc')}
             </p>
             <ul className="space-y-2 mb-8">
               {[
-                'Auto-detect all Bitcoin Core installations on this machine',
-                'Read bitcoin.conf and .cookie credentials automatically',
-                'Connect to Bitcoin Core via RPC',
-                'Configure ZeroMQ for live block/tx feeds',
-                'Set your dashboard password',
-              ].map((t) => (
-                <li key={t} className="flex items-center gap-2 text-sm text-mim-text-muted">
-                  <span className="text-bitcoin-orange">›</span> {t}
+                t('setup.welcome.autoDetect'),
+                t('setup.welcome.readConf'),
+                t('setup.welcome.connectRpc'),
+                t('setup.welcome.configZmq'),
+                t('setup.welcome.setPassword'),
+              ].map((text) => (
+                <li key={text} className="flex items-center gap-2 text-sm text-mim-text-muted">
+                  <span className="text-bitcoin-orange">›</span> {text}
                 </li>
               ))}
             </ul>
             <div className="flex justify-end">
-              <Btn onClick={next}>Get Started →</Btn>
+              <Btn onClick={next}>{t('setup.welcome.start')}</Btn>
             </div>
           </Card>
         )}
@@ -453,9 +470,9 @@ export default function SetupPage() {
         {/* ── Step 2: Detect Node ── */}
         {step === 2 && (
           <Card>
-            <h2 className="text-lg font-semibold text-mim-text mb-1">Detect Node</h2>
+            <h2 className="text-lg font-semibold text-mim-text mb-1">{t('setup.detect.title')}</h2>
             <p className="text-sm text-mim-text-muted mb-5">
-              Scanning your system for Bitcoin Core installations.
+              {t('setup.detect.desc')}
             </p>
 
             {/* Scanning spinner */}
@@ -465,7 +482,7 @@ export default function SetupPage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
-                <p className="text-sm text-mim-text-muted font-mono">Scanning your system for Bitcoin Core...</p>
+                <p className="text-sm text-mim-text-muted font-mono">{t('setup.detect.scanning')}</p>
               </div>
             )}
 
@@ -473,7 +490,7 @@ export default function SetupPage() {
             {!busy && detectDone && detectResult && detectResult.nodes.length > 1 && (
               <div className="space-y-3">
                 <p className="text-xs text-mim-text-muted font-mono">
-                  Found {detectResult.nodes.length} Bitcoin Core installations — select one:
+                  {t('setup.detect.found', { count: detectResult.nodes.length })}
                 </p>
                 {detectResult.nodes.map((node) => (
                   <NodeCard
@@ -484,7 +501,7 @@ export default function SetupPage() {
                   />
                 ))}
                 {selectedNode && (
-                  <p className="text-xs text-green-400 font-mono">✓ All fields pre-filled — review in next steps</p>
+                  <p className="text-xs text-green-400 font-mono">{t('setup.detect.preFilled')}</p>
                 )}
               </div>
             )}
@@ -505,18 +522,18 @@ export default function SetupPage() {
                     <Badge ok>ZMQ endpoints detected in bitcoin.conf</Badge>
                   )}
                 </div>
-                <p className="text-xs text-green-400 font-mono">✓ All fields pre-filled — review in next steps</p>
+                <p className="text-xs text-green-400 font-mono">{t('setup.detect.preFilled')}</p>
               </div>
             )}
 
             {/* Results: nothing found */}
             {!busy && detectDone && detectResult && detectResult.nodes.length === 0 && (
               <div className="space-y-3">
-                <Badge ok={false}>No Bitcoin Core installations found</Badge>
+                <Badge ok={false}>{t('setup.detect.notFound')}</Badge>
                 <InfoBox>
-                  <p>The scan searched common home directories.</p>
+                  <p>{t('setup.detect.searchedDirs')}</p>
                   <p className="text-mim-text-dim mt-1">
-                    You can still proceed and enter credentials manually in the next step.
+                    {t('setup.detect.proceedManual')}
                   </p>
                 </InfoBox>
               </div>
@@ -531,15 +548,15 @@ export default function SetupPage() {
             {!busy && detectDone && (
               <div className="mt-4">
                 <Btn onClick={() => { setDetectDone(false); detect(); }} variant="ghost">
-                  ↺ Re-scan
+                  {t('setup.detect.rescan')}
                 </Btn>
               </div>
             )}
 
             <div className="flex justify-between mt-6">
-              <Btn onClick={back} variant="ghost">← Back</Btn>
+              <Btn onClick={back} variant="ghost">{t('setup.nav.back')}</Btn>
               <Btn onClick={next} disabled={busy}>
-                {detectResult?.nodes.length === 0 ? 'Skip →' : 'Next →'}
+                {detectResult?.nodes.length === 0 ? t('setup.detect.skip') : t('setup.nav.next')}
               </Btn>
             </div>
           </Card>
@@ -548,20 +565,18 @@ export default function SetupPage() {
         {/* ── Step 3: RPC ── */}
         {step === 3 && (
           <Card>
-            <h2 className="text-lg font-semibold text-mim-text mb-1">RPC Connection</h2>
+            <h2 className="text-lg font-semibold text-mim-text mb-1">{t('setup.rpc.title')}</h2>
             <p className="text-sm text-mim-text-muted mb-5">
-              {detected
-                ? 'Fields pre-filled from your bitcoin.conf. Edit if needed.'
-                : 'Enter your Bitcoin Core RPC credentials.'}
+              {detected ? t('setup.rpc.descDetected') : t('setup.rpc.descManual')}
             </p>
 
             {/* Docker rpcallowip warning */}
             <div className="mb-5 px-4 py-3 rounded-lg border border-yellow-700/60 bg-yellow-950/30">
               <p className="text-xs font-semibold text-yellow-400 mb-2">
-                ⚠ Your bitcoin.conf must allow connections from Docker
+                ⚠ {t('setup.rpc.dockerWarning')}
               </p>
               <p className="text-xs text-mim-text-muted mb-2">
-                Add these lines under your network section (e.g. <code className="text-mim-text">[signet]</code>):
+                {t('setup.rpc.dockerHint')} <code className="text-mim-text">[signet]</code>):
               </p>
               <pre className="px-3 py-2 rounded bg-mim-bg border border-mim-border text-xs font-mono text-mim-text whitespace-pre mb-2">{`rpcbind=0.0.0.0\nrpcallowip=172.16.0.0/12\nrpcallowip=127.0.0.1`}</pre>
               <div className="flex items-center gap-2">
@@ -570,9 +585,9 @@ export default function SetupPage() {
                   onClick={() => navigator.clipboard.writeText('rpcbind=0.0.0.0\nrpcallowip=172.16.0.0/12\nrpcallowip=127.0.0.1')}
                   className="px-2.5 py-1 rounded text-[10px] font-mono bg-mim-bg border border-mim-border text-mim-text-muted hover:text-bitcoin-orange hover:border-bitcoin-orange transition-colors"
                 >
-                  Copy to clipboard
+                  {t('setup.rpc.copyClipboard')}
                 </button>
-                <span className="text-[10px] text-mim-text-dim">Restart bitcoind after changes.</span>
+                <span className="text-[10px] text-mim-text-dim">{t('setup.rpc.restartHint')}</span>
               </div>
             </div>
 
@@ -580,32 +595,32 @@ export default function SetupPage() {
               {/* Host + Port */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
-                  <Field label="Host" value={form.rpcHost} onChange={(v) => patch({ rpcHost: v })}
+                  <Field label={t('setup.rpc.host')} value={form.rpcHost} onChange={(v) => patch({ rpcHost: v })}
                          placeholder="host.docker.internal"
-                         hint="Address of your host machine seen from Docker" />
+                         hint={t('setup.rpc.hostHint')} />
                 </div>
-                <Field label="Port" value={form.rpcPort} onChange={(v) => patch({ rpcPort: v })} />
+                <Field label={t('setup.rpc.port')} value={form.rpcPort} onChange={(v) => patch({ rpcPort: v })} />
               </div>
 
               {/* Auth method */}
               <div>
                 <label className="block text-xs text-mim-text-muted mb-1.5 uppercase tracking-widest">
-                  Authentication
+                  {t('setup.rpc.auth')}
                 </label>
                 <PillGroup<AuthMode>
                   options={['userpass', 'cookie']}
                   value={form.authMode}
                   onChange={(v) => { patch({ authMode: v }); setErr(''); }}
-                  labels={{ userpass: 'User / Password', cookie: 'Cookie File' }}
+                  labels={{ userpass: t('setup.rpc.userPass'), cookie: t('setup.rpc.cookieFile') }}
                 />
               </div>
 
               {/* User/Password */}
               {form.authMode === 'userpass' && (
                 <div className="space-y-3">
-                  <Field label="RPC User" value={form.rpcUser} onChange={(v) => patch({ rpcUser: v })}
+                  <Field label={t('setup.rpc.rpcUser')} value={form.rpcUser} onChange={(v) => patch({ rpcUser: v })}
                          placeholder="bitcoinrpc" />
-                  <Field label="RPC Password" type="password" value={form.rpcPass}
+                  <Field label={t('setup.rpc.rpcPassword')} type="password" value={form.rpcPass}
                          onChange={(v) => patch({ rpcPass: v })} placeholder="••••••••" />
                 </div>
               )}
@@ -616,30 +631,29 @@ export default function SetupPage() {
                   {selectedNode?.cookie.found ? (
                     <>
                       <Badge ok>
-                        Cookie auto-loaded from {selectedNode.cookie.path}
+                        {t('setup.rpc.cookieAutoLoaded', { path: selectedNode.cookie.path ?? '' })}
                       </Badge>
                       <InfoBox>
-                        <p className="text-green-400">User: {form.rpcUser}</p>
+                        <p className="text-green-400">{t('setup.summary.user')} {form.rpcUser}</p>
                         <p className="text-mim-text-dim mt-1">
-                          The cookie is re-read on every RPC call — credentials stay
-                          current automatically after each Bitcoin Core restart.
+                          {t('setup.rpc.cookieAutoRefresh')}
                         </p>
                       </InfoBox>
                     </>
                   ) : (
                     <div className="space-y-3">
                       <InfoBox>
-                        <p>Run in your terminal:</p>
+                        <p>{t('setup.rpc.runTerminal')}</p>
                         <p className="text-bitcoin-orange">
                           cat ~/.bitcoin/{form.btcNetwork !== 'mainnet' ? `${form.btcNetwork}/` : ''}.cookie
                         </p>
                         <p className="text-mim-text-dim mt-1">
-                          Format: <span className="text-mim-text">__cookie__:&lt;password&gt;</span>
+                          {t('setup.rpc.cookieFormat')} <span className="text-mim-text">__cookie__:&lt;password&gt;</span>
                         </p>
                       </InfoBox>
                       <div>
                         <label className="block text-xs text-mim-text-muted mb-1.5 uppercase tracking-widest">
-                          Paste cookie content
+                          {t('setup.rpc.pasteCookie')}
                         </label>
                         <textarea
                           value={form.cookiePaste}
@@ -649,13 +663,13 @@ export default function SetupPage() {
                           className="w-full px-4 py-2.5 rounded-lg font-mono text-sm bg-mim-bg border border-mim-border text-mim-text placeholder-mim-text-dim focus:outline-none focus:border-bitcoin-orange focus:ring-1 focus:ring-bitcoin-orange transition-colors resize-none"
                         />
                         {form.rpcUser === '__cookie__' && form.rpcPass && (
-                          <p className="text-xs text-green-400 font-mono mt-1">✓ Parsed — user: {form.rpcUser}</p>
+                          <p className="text-xs text-green-400 font-mono mt-1">{t('setup.rpc.parsed', { user: form.rpcUser })}</p>
                         )}
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <Field label="User (auto)" value={form.rpcUser}
+                        <Field label={t('setup.rpc.userAuto')} value={form.rpcUser}
                                onChange={(v) => patch({ rpcUser: v })} readOnly={form.rpcUser === '__cookie__'} />
-                        <Field label="Password (auto)" type="password" value={form.rpcPass}
+                        <Field label={t('setup.rpc.passAuto')} type="password" value={form.rpcPass}
                                onChange={(v) => patch({ rpcPass: v })} />
                       </div>
                     </div>
@@ -668,7 +682,7 @@ export default function SetupPage() {
             {detected && Object.keys(confParsed).length > 0 && (
               <details className="mt-4">
                 <summary className="text-xs text-mim-text-muted cursor-pointer hover:text-mim-text font-mono">
-                  Show parsed bitcoin.conf ({Object.keys(confParsed).length} keys)
+                  {t('setup.rpc.showParsed', { count: Object.keys(confParsed).length })}
                 </summary>
                 <div className="mt-2 max-h-36 overflow-y-auto rounded-lg bg-mim-bg border border-mim-border p-3 text-xs font-mono text-mim-text-muted space-y-0.5">
                   {Object.entries(confParsed).map(([k, v]) => (
@@ -682,16 +696,16 @@ export default function SetupPage() {
 
             {rpcOk && (
               <div className="mt-4 px-4 py-3 rounded-lg bg-green-950/40 border border-green-900/50 text-xs font-mono text-green-400">
-                ✓ Connected — {rpcOk.chain} chain, block {rpcOk.blocks.toLocaleString()}
+                {t('setup.rpc.connected', { chain: rpcOk.chain, blocks: rpcOk.blocks.toLocaleString() })}
               </div>
             )}
             {err && <p className="text-xs text-red-400 mt-3 font-mono">{err}</p>}
 
             <div className="flex justify-between mt-6">
-              <Btn onClick={back} variant="ghost">← Back</Btn>
+              <Btn onClick={back} variant="ghost">{t('setup.nav.back')}</Btn>
               <div className="flex gap-2">
-                <Btn onClick={testRpc} loading={busy} variant="secondary" disabled={!rpcReady}>Test</Btn>
-                <Btn onClick={next} disabled={!rpcReady}>Next →</Btn>
+                <Btn onClick={testRpc} loading={busy} variant="secondary" disabled={!rpcReady}>{t('setup.rpc.test')}</Btn>
+                <Btn onClick={next} disabled={!rpcReady}>{t('setup.nav.next')}</Btn>
               </div>
             </div>
           </Card>
@@ -700,19 +714,19 @@ export default function SetupPage() {
         {/* ── Step 4: ZMQ ── */}
         {step === 4 && (
           <Card>
-            <h2 className="text-lg font-semibold text-mim-text mb-1">ZeroMQ Config</h2>
+            <h2 className="text-lg font-semibold text-mim-text mb-1">{t('setup.zmq.title')}</h2>
             <p className="text-sm text-mim-text-muted mb-4">
-              ZMQ enables real-time block and transaction feeds.
+              {t('setup.zmq.desc')}
             </p>
 
             {/* ZMQ binding warning */}
             {!form.skipZmq && (
               <div className="mb-4 px-4 py-3 rounded-lg border border-yellow-700/60 bg-yellow-950/30">
                 <p className="text-xs font-semibold text-yellow-400 mb-2">
-                  ⚠ ZMQ must bind to 0.0.0.0 to be reachable from Docker
+                  ⚠ {t('setup.zmq.bindWarning')}
                 </p>
                 <p className="text-xs text-mim-text-muted mb-2">
-                  Use <code className="text-mim-text">0.0.0.0</code> (not 127.0.0.1) in your bitcoin.conf:
+                  {t('setup.zmq.bindHint')}
                 </p>
                 <pre className="px-3 py-2 rounded bg-mim-bg border border-mim-border text-xs font-mono text-mim-text whitespace-pre mb-2">{`zmqpubhashblock=tcp://0.0.0.0:28332\nzmqpubhashtx=tcp://0.0.0.0:28333\nzmqpubrawtx=tcp://0.0.0.0:28334`}</pre>
                 <button
@@ -720,17 +734,17 @@ export default function SetupPage() {
                   onClick={() => navigator.clipboard.writeText('zmqpubhashblock=tcp://0.0.0.0:28332\nzmqpubhashtx=tcp://0.0.0.0:28333\nzmqpubrawtx=tcp://0.0.0.0:28334')}
                   className="px-2.5 py-1 rounded text-[10px] font-mono bg-mim-bg border border-mim-border text-mim-text-muted hover:text-bitcoin-orange hover:border-bitcoin-orange transition-colors"
                 >
-                  Copy to clipboard
+                  {t('setup.rpc.copyClipboard')}
                 </button>
               </div>
             )}
 
             {zmqNotDetected && !form.skipZmq && (
               <div className="mb-4 space-y-2">
-                <Badge ok={false}>ZMQ not found in bitcoin.conf</Badge>
+                <Badge ok={false}>{t('setup.zmq.notFound')}</Badge>
                 <details>
                   <summary className="text-xs text-yellow-400 cursor-pointer hover:text-yellow-300 font-mono">
-                    Add these lines to bitcoin.conf and restart Bitcoin Core
+                    {t('setup.zmq.addLines')}
                   </summary>
                   <pre className="mt-2 px-4 py-3 rounded-lg bg-mim-bg border border-mim-border text-xs font-mono text-mim-text whitespace-pre-wrap">
                     {zmqExampleConf}
@@ -740,14 +754,14 @@ export default function SetupPage() {
             )}
 
             {selectedNode?.zmqDetected && !form.skipZmq && (
-              <Badge ok>ZMQ endpoints auto-filled from bitcoin.conf</Badge>
+              <Badge ok>{t('setup.zmq.autoFilled')}</Badge>
             )}
 
             <label className="flex items-center gap-2 my-4 cursor-pointer">
               <input type="checkbox" checked={form.skipZmq}
                      onChange={(e) => patch({ skipZmq: e.target.checked })}
                      className="accent-bitcoin-orange" />
-              <span className="text-sm text-mim-text-muted">Skip ZMQ (disable live feed)</span>
+              <span className="text-sm text-mim-text-muted">{t('setup.zmq.skip')}</span>
             </label>
 
             {!form.skipZmq && (
@@ -763,8 +777,8 @@ export default function SetupPage() {
 
             {err && <p className="text-xs text-red-400 mt-3 font-mono">{err}</p>}
             <div className="flex justify-between mt-6">
-              <Btn onClick={back} variant="ghost">← Back</Btn>
-              <Btn onClick={next}>Next →</Btn>
+              <Btn onClick={back} variant="ghost">{t('setup.nav.back')}</Btn>
+              <Btn onClick={next}>{t('setup.nav.next')}</Btn>
             </div>
           </Card>
         )}
@@ -772,22 +786,37 @@ export default function SetupPage() {
         {/* ── Step 5: Password ── */}
         {step === 5 && (
           <Card>
-            <h2 className="text-lg font-semibold text-mim-text mb-1">Dashboard Password</h2>
-            <p className="text-sm text-mim-text-muted mb-6">Set the password to log in to MIM-Dashboard.</p>
+            <h2 className="text-lg font-semibold text-mim-text mb-1">{t('setup.password.title')}</h2>
+            <p className="text-sm text-mim-text-muted mb-6">{t('setup.password.desc')}</p>
             <div className="space-y-3">
-              <Field label="Password" type="password" value={form.password}
-                     onChange={(v) => patch({ password: v })} placeholder="Minimum 8 characters" />
-              <Field label="Confirm Password" type="password" value={form.passwordConfirm}
+              <Field label={t('setup.password.password')} type="password" value={form.password}
+                     onChange={(v) => patch({ password: v })} placeholder={t('setup.password.min8')} />
+              <Field label={t('setup.password.confirm')} type="password" value={form.passwordConfirm}
                      onChange={(v) => patch({ passwordConfirm: v })} placeholder="••••••••" />
             </div>
             {form.password && form.passwordConfirm && form.password !== form.passwordConfirm && (
-              <p className="text-xs text-red-400 mt-3 font-mono">Passwords do not match</p>
+              <p className="text-xs text-red-400 mt-3 font-mono">{t('setup.password.mismatch')}</p>
             )}
+
+            <div className="mt-5">
+              <label className="block text-xs text-mim-text-muted mb-1.5 uppercase tracking-widest">
+                {t('setup.password.btcUnit')}
+              </label>
+              <PillGroup<'BTC' | 'sats'>
+                options={['BTC', 'sats']}
+                value={form.btcUnit}
+                onChange={(v) => patch({ btcUnit: v })}
+                labels={{ BTC: '₿ BTC', sats: 'sats' }}
+              />
+              <p className="text-xs text-mim-text-dim mt-1.5">
+                {form.btcUnit === 'BTC' ? t('setup.password.btcHint') : t('setup.password.satsHint')}
+              </p>
+            </div>
             {err && <p className="text-xs text-red-400 mt-3 font-mono">{err}</p>}
             <div className="flex justify-between mt-6">
-              <Btn onClick={back} variant="ghost">← Back</Btn>
+              <Btn onClick={back} variant="ghost">{t('setup.nav.back')}</Btn>
               <Btn onClick={next} disabled={form.password.length < 8 || form.password !== form.passwordConfirm}>
-                Next →
+                {t('setup.nav.next')}
               </Btn>
             </div>
           </Card>
@@ -796,16 +825,16 @@ export default function SetupPage() {
         {/* ── Step 6: Summary ── */}
         {step === 6 && (
           <Card>
-            <h2 className="text-lg font-semibold text-mim-text mb-4">Ready to Launch</h2>
+            <h2 className="text-lg font-semibold text-mim-text mb-4">{t('setup.summary.title')}</h2>
             <div className="rounded-lg overflow-hidden border border-mim-border mb-6">
               {[
-                ['Network',      form.btcNetwork],
-                ['RPC Host',     `${form.rpcHost}:${form.rpcPort}`],
-                ['Auth',         form.authMode === 'cookie'
-                  ? `Cookie${selectedNode?.cookie.found ? ' (auto-refresh)' : ' (pasted)'}`
-                  : `User: ${form.rpcUser}`],
-                ['ZMQ',          form.skipZmq ? 'Disabled' : form.zmqBlockUrl],
-                ['bitcoin.conf', selectedNode?.confPath ?? 'Not set'],
+                [t('setup.summary.network'), form.btcNetwork],
+                [t('setup.summary.rpcHost'), `${form.rpcHost}:${form.rpcPort}`],
+                [t('setup.summary.auth'),    form.authMode === 'cookie'
+                  ? (selectedNode?.cookie.found ? t('setup.summary.cookieAuto') : t('setup.summary.cookiePasted'))
+                  : `${t('setup.summary.user')} ${form.rpcUser}`],
+                [t('setup.summary.zmq'),     form.skipZmq ? t('setup.summary.disabled') : form.zmqBlockUrl],
+                ['bitcoin.conf',             selectedNode?.confPath ?? t('setup.summary.notSet')],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between px-4 py-2.5 border-b border-mim-border last:border-0 bg-mim-bg/40">
                   <span className="text-mim-text-muted font-mono text-xs uppercase tracking-wider">{k}</span>
@@ -816,13 +845,13 @@ export default function SetupPage() {
 
             {rpcOk && (
               <div className="mb-4 px-4 py-3 rounded-lg bg-green-950/40 border border-green-900/50 text-xs font-mono text-green-400">
-                ✓ RPC verified — {rpcOk.chain} chain, block {rpcOk.blocks.toLocaleString()}
+                {t('setup.summary.rpcVerified', { chain: rpcOk.chain, blocks: rpcOk.blocks.toLocaleString() })}
               </div>
             )}
             {err && <p className="text-xs text-red-400 mb-4 font-mono">{err}</p>}
             <div className="flex justify-between">
-              <Btn onClick={back} variant="ghost">← Back</Btn>
-              <Btn onClick={save} loading={busy}>Launch Dashboard →</Btn>
+              <Btn onClick={back} variant="ghost">{t('setup.nav.back')}</Btn>
+              <Btn onClick={save} loading={busy}>{t('setup.summary.launch')}</Btn>
             </div>
           </Card>
         )}

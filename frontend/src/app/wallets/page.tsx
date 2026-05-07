@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { api, getToken } from '@/lib/api';
 import { formatHash, formatNumber } from '@/lib/formatters';
+import { useBtcUnit } from '@/hooks/useBtcUnit';
+import { usePreferences } from '@/hooks/usePreferences';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -108,6 +110,8 @@ function confColor(c: number): string {
 }
 
 export default function WalletsPage() {
+  const { fmt } = useBtcUnit();
+  const { t } = usePreferences();
   const [loaded,         setLoaded]         = useState<string[]>([]);
   const [available,      setAvailable]      = useState<string[]>([]);
   const [active,         setActive]         = useState('');
@@ -416,16 +420,16 @@ export default function WalletsPage() {
       {/* Active Wallets */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <SectionTitle>Active Wallets</SectionTitle>
+          <SectionTitle>{t('wallets.activeWallets')}</SectionTitle>
           <button
             onClick={() => setShowModal(true)}
             className="px-3 py-2 rounded-lg bg-bitcoin-orange text-black text-xs font-semibold hover:bg-bitcoin-orange-dark transition-colors"
           >
-            + Create
+            {t('wallets.create')}
           </button>
         </div>
         {loaded.length === 0 ? (
-          <p className="text-xs text-mim-text-dim">No wallets loaded.</p>
+          <p className="text-xs text-mim-text-dim">{t('wallets.noWallets')}</p>
         ) : (
           <div className="grid gap-2">
             {loaded.map((w) => (
@@ -440,7 +444,7 @@ export default function WalletsPage() {
               >
                 <span className="w-2 h-2 rounded-full bg-mim-green flex-shrink-0" />
                 <span className="text-sm font-medium text-mim-text flex-1">{w || '(default)'}</span>
-                <span className="text-[10px] font-semibold text-mim-green">Loaded</span>
+                <span className="text-[10px] font-semibold text-mim-green">{t('wallets.loaded')}</span>
               </button>
             ))}
           </div>
@@ -450,7 +454,7 @@ export default function WalletsPage() {
       {/* Available (not loaded) Wallets */}
       {notLoaded.length > 0 && (
         <section>
-          <SectionTitle>Available Wallets</SectionTitle>
+          <SectionTitle>{t('wallets.availableWallets')}</SectionTitle>
           <div className="grid gap-2">
             {notLoaded.map((w) => (
               <div
@@ -464,7 +468,7 @@ export default function WalletsPage() {
                   disabled={loadingWallet === w}
                   className="px-3 py-1.5 rounded-lg bg-bitcoin-orange text-black text-xs font-semibold hover:bg-bitcoin-orange-dark disabled:opacity-50 transition-colors"
                 >
-                  {loadingWallet === w ? 'Loading…' : 'Load'}
+                  {loadingWallet === w ? t('wallets.loading') : t('wallets.load')}
                 </button>
               </div>
             ))}
@@ -482,38 +486,38 @@ export default function WalletsPage() {
               onClick={handleUnload}
               className="px-3 py-1.5 rounded-lg border border-mim-border text-mim-text-muted text-xs hover:border-mim-border-light hover:text-mim-text transition-colors"
             >
-              Unload
+              {t('wallets.unload')}
             </button>
             <button
               onClick={handleBackup}
               disabled={backingUp}
               className="ml-auto px-3 py-1.5 rounded-lg border border-mim-border text-mim-text-muted text-xs hover:border-mim-border-light hover:text-mim-text transition-colors disabled:opacity-40"
             >
-              {backingUp ? 'Downloading…' : '↓ Backup'}
+              {backingUp ? t('wallets.downloading') : t('wallets.backup')}
             </button>
           </div>
 
           {loadingData ? (
-            <p className="text-xs text-mim-text-muted animate-pulse">Loading wallet data…</p>
+            <p className="text-xs text-mim-text-muted animate-pulse">{t('wallets.loadingData')}</p>
           ) : (
             <>
               {/* Balance */}
               {balance && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <StatCard label="Confirmed"   value={`${balance.confirmed.toFixed(8)} BTC`}  color="text-mim-green" />
-                  <StatCard label="Unconfirmed" value={`${balance.unconfirmed.toFixed(8)} BTC`} color="text-mim-yellow" />
-                  <StatCard label="Immature"    value={`${balance.immature.toFixed(8)} BTC`}    color="text-mim-text-muted" />
-                  <StatCard label="UTXOs"       value={formatNumber(balance.utxoCount)} />
+                  <StatCard label={t('wallets.confirmed')}   value={fmt(balance.confirmed)}  color="text-mim-green" />
+                  <StatCard label={t('wallets.unconfirmed')} value={fmt(balance.unconfirmed)} color="text-mim-yellow" />
+                  <StatCard label={t('wallets.immature')}    value={fmt(balance.immature)}    color="text-mim-text-muted" />
+                  <StatCard label={t('wallets.utxos')}       value={formatNumber(balance.utxoCount)} />
                 </div>
               )}
 
               {/* Addresses */}
               <div>
-                <SectionTitle>Addresses</SectionTitle>
+                <SectionTitle>{t('wallets.addresses')}</SectionTitle>
                 <div className="flex flex-wrap gap-2 mb-4">
                   <input
                     type="text"
-                    placeholder="Label (optional)"
+                    placeholder={t('wallets.labelOptional')}
                     value={newAddrForm.label}
                     onChange={(e) => setNewAddrForm((f) => ({ ...f, label: e.target.value }))}
                     className="bg-mim-surface border border-mim-border text-mim-text text-sm rounded-lg px-3 py-2 w-44 focus:outline-none focus:border-bitcoin-orange/60"
@@ -530,7 +534,7 @@ export default function WalletsPage() {
                     disabled={generatingAddr}
                     className="px-4 py-2 rounded-lg bg-bitcoin-orange text-black text-xs font-semibold hover:bg-bitcoin-orange-dark disabled:opacity-50 transition-colors"
                   >
-                    {generatingAddr ? '…' : '+ New Address'}
+                    {generatingAddr ? '…' : t('wallets.newAddress')}
                   </button>
                 </div>
                 {addresses.length > 0 && (
@@ -538,7 +542,7 @@ export default function WalletsPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-mim-border">
-                          {['Address', '', 'Label', 'Type', 'Status'].map((h, i) => (
+                          {[t('wallets.address'), '', t('wallets.label'), t('wallets.type'), t('wallets.status')].map((h, i) => (
                             <th key={`${h}-${i}`} className={`px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-mim-text-muted ${i > 2 ? 'text-right' : 'text-left'}`}>{h}</th>
                           ))}
                         </tr>
@@ -552,7 +556,7 @@ export default function WalletsPage() {
                             <td className="px-4 py-2.5 text-right text-mim-text-dim text-xs">{a.type}</td>
                             <td className="px-4 py-2.5 text-right">
                               <span className={`text-[10px] font-semibold ${a.used ? 'text-mim-text-dim' : 'text-mim-green'}`}>
-                                {a.used ? 'used' : 'fresh'}
+                                {a.used ? t('wallets.used') : t('wallets.fresh')}
                               </span>
                             </td>
                           </tr>
@@ -561,23 +565,23 @@ export default function WalletsPage() {
                     </table>
                   </div>
                 )}
-                {addresses.length === 0 && <p className="text-xs text-mim-text-dim">No addresses yet.</p>}
+                {addresses.length === 0 && <p className="text-xs text-mim-text-dim">{t('wallets.noAddresses')}</p>}
               </div>
 
               {/* ── Coin Control ─────────────────────────────────────────────── */}
               <div>
                 {/* Header */}
                 <div className="flex items-center justify-between mb-1">
-                  <SectionTitle>Coin Control — UTXOs</SectionTitle>
+                  <SectionTitle>{t('wallets.coinControl')}</SectionTitle>
                   <span className="text-xs text-mim-text-muted font-mono">
-                    {utxos.length} UTXOs · {totalBtc.toFixed(8)} BTC ({formatNumber(totalSats)} sats)
+                    {utxos.length} UTXOs · {fmt(totalBtc)}
                   </span>
                 </div>
 
                 {selected.size > 0 && (
                   <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-bitcoin-orange/5 border border-bitcoin-orange/20">
                     <span className="text-xs text-bitcoin-orange font-semibold">
-                      Selected: {selected.size} UTXOs · {selectedTotal.toFixed(8)} BTC ({formatNumber(selectedTotalSats)} sats)
+                      {t('wallets.selected')} {selected.size} UTXOs · {fmt(selectedTotal)}
                     </span>
                   </div>
                 )}
@@ -586,7 +590,7 @@ export default function WalletsPage() {
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <input
                     type="text"
-                    placeholder="Search address, txid, or label…"
+                    placeholder={t('wallets.searchPlaceholder')}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="bg-mim-surface border border-mim-border text-mim-text text-xs rounded-lg px-3 py-2 w-64 focus:outline-none focus:border-bitcoin-orange/60 placeholder-mim-text-dim"
@@ -602,7 +606,7 @@ export default function WalletsPage() {
                             : 'border-mim-border text-mim-text-muted hover:border-mim-border-light'
                         }`}
                       >
-                        {f.label}
+                        {f.id === 'all' ? t('wallets.all') : f.label}
                       </button>
                     ))}
                   </div>
@@ -613,20 +617,20 @@ export default function WalletsPage() {
                       onChange={(e) => setSpendableOnly(e.target.checked)}
                       className="accent-bitcoin-orange w-3.5 h-3.5"
                     />
-                    <span className="text-xs text-mim-text-muted">Spendable only</span>
+                    <span className="text-xs text-mim-text-muted">{t('wallets.spendableOnly')}</span>
                   </label>
                   <div className="ml-auto flex gap-1">
                     <button
                       onClick={selectAll}
                       className="px-2.5 py-1.5 rounded-lg text-xs border border-mim-border text-mim-text-muted hover:border-mim-border-light hover:text-mim-text transition-colors"
                     >
-                      Select All
+                      {t('wallets.selectAll')}
                     </button>
                     <button
                       onClick={deselectAll}
                       className="px-2.5 py-1.5 rounded-lg text-xs border border-mim-border text-mim-text-muted hover:border-mim-border-light hover:text-mim-text transition-colors"
                     >
-                      Deselect All
+                      {t('wallets.deselectAll')}
                     </button>
                   </div>
                 </div>
@@ -634,7 +638,7 @@ export default function WalletsPage() {
                 {/* UTXO Table */}
                 {filteredUtxos.length === 0 ? (
                   <p className="text-xs text-mim-text-dim">
-                    {utxos.length === 0 ? 'No UTXOs.' : 'No UTXOs match current filters.'}
+                    {utxos.length === 0 ? t('wallets.noUtxos') : t('wallets.noUtxosFilter')}
                   </p>
                 ) : (
                   <div className="bg-mim-surface border border-mim-border rounded-xl overflow-x-auto">
@@ -666,13 +670,13 @@ export default function WalletsPage() {
                               />
                             </th>
                             {[
-                              { label: 'Amount (BTC)',  align: 'text-right' },
-                              { label: 'Sats',          align: 'text-right' },
-                              { label: 'Address',       align: 'text-left' },
-                              { label: 'Confs',         align: 'text-right' },
-                              { label: 'Outpoint',      align: 'text-left' },
-                              { label: 'Label',         align: 'text-left' },
-                              { label: '',              align: 'text-right' },
+                              { label: t('wallets.amount'),   align: 'text-right' },
+                              { label: t('wallets.sats'),     align: 'text-right' },
+                              { label: t('wallets.address'),  align: 'text-left' },
+                              { label: t('wallets.confs'),    align: 'text-right' },
+                              { label: t('wallets.outpoint'), align: 'text-left' },
+                              { label: t('wallets.label'),    align: 'text-left' },
+                              { label: '',                    align: 'text-right' },
                             ].map((h, i) => (
                               <th key={i} className={`px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-mim-text-muted ${h.align} whitespace-nowrap`}>
                                 {h.label}
@@ -706,7 +710,7 @@ export default function WalletsPage() {
                                   />
                                 </td>
                                 <td className="px-3 py-2.5 text-right font-mono text-mim-text text-xs whitespace-nowrap">
-                                  {u.amount.toFixed(8)}
+                                  {fmt(u.amount)}
                                 </td>
                                 <td className="px-3 py-2.5 text-right font-mono text-mim-text-muted text-xs whitespace-nowrap">
                                   {formatNumber(u.amount_sats)}
@@ -741,7 +745,7 @@ export default function WalletsPage() {
                                         : 'border-mim-border text-mim-text-dim hover:border-mim-border-light'
                                     }`}
                                   >
-                                    {u.locked ? '🔒 locked' : '🔓 unlock'}
+                                    {u.locked ? t('wallets.locked') : t('wallets.unlock')}
                                   </button>
                                 </td>
                               </tr>
@@ -760,19 +764,19 @@ export default function WalletsPage() {
                       onClick={handleSendSelected}
                       className="px-4 py-2 rounded-lg bg-bitcoin-orange text-black text-xs font-semibold hover:bg-bitcoin-orange-dark transition-colors"
                     >
-                      Send Selected UTXOs →
+                      {t('wallets.sendSelected')}
                     </button>
                     <button
                       onClick={() => handleBulkLock(true)}
                       className="px-3 py-2 rounded-lg border border-mim-border text-mim-text-muted text-xs hover:border-mim-border-light hover:text-mim-text transition-colors"
                     >
-                      Lock Selected
+                      {t('wallets.lockSelected')}
                     </button>
                     <button
                       onClick={() => handleBulkLock(false)}
                       className="px-3 py-2 rounded-lg border border-mim-border text-mim-text-muted text-xs hover:border-mim-border-light hover:text-mim-text transition-colors"
                     >
-                      Unlock Selected
+                      {t('wallets.unlockSelected')}
                     </button>
                   </div>
                 )}
@@ -780,15 +784,15 @@ export default function WalletsPage() {
 
               {/* History */}
               <div>
-                <SectionTitle>History</SectionTitle>
+                <SectionTitle>{t('wallets.history')}</SectionTitle>
                 {history.length === 0 ? (
-                  <p className="text-xs text-mim-text-dim">No transactions yet.</p>
+                  <p className="text-xs text-mim-text-dim">{t('wallets.noTx')}</p>
                 ) : (
                   <div className="bg-mim-surface border border-mim-border rounded-xl overflow-x-auto">
                     <table className="w-full text-sm min-w-[500px]">
                       <thead>
                         <tr className="border-b border-mim-border">
-                          {['Txid', 'Category', 'Amount', 'Confs', 'Time', 'Notes'].map((h, i) => (
+                          {[t('wallets.txid'), t('wallets.category'), t('wallets.amount'), t('wallets.confs'), t('wallets.time'), t('wallets.notes')].map((h, i) => (
                             <th key={h} className={`px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-mim-text-muted ${i > 1 && i < 5 ? 'text-right' : 'text-left'} ${i === 5 ? 'text-center' : ''}`}>{h}</th>
                           ))}
                         </tr>
@@ -815,7 +819,7 @@ export default function WalletsPage() {
                                 </td>
                                 <td className={`px-4 py-2.5 text-xs font-semibold ${catColor(tx.category)}`}>{tx.category}</td>
                                 <td className={`px-4 py-2.5 text-right font-mono text-xs ${catColor(tx.category)}`}>
-                                  {tx.amount > 0 ? '+' : ''}{tx.amount.toFixed(8)}
+                                  {tx.amount > 0 ? '+' : tx.amount < 0 ? '-' : ''}{fmt(Math.abs(tx.amount))}
                                 </td>
                                 <td className="px-4 py-2.5 text-right text-mim-text-muted text-xs">{tx.confirmations}</td>
                                 <td className="px-4 py-2.5 text-right text-mim-text-muted text-xs">{formatTimeAgo(tx.time)}</td>
@@ -855,7 +859,7 @@ export default function WalletsPage() {
                                           value={noteDraft}
                                           onChange={(e) => setNoteDraft(e.target.value)}
                                           onKeyDown={(e) => e.key === 'Enter' && handleAddNote(tx.txid)}
-                                          placeholder="Add a note…"
+                                          placeholder={t('wallets.addNote')}
                                           className="flex-1 bg-mim-surface border border-mim-border text-mim-text text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-bitcoin-orange/60 placeholder-mim-text-dim"
                                         />
                                         <button
@@ -887,10 +891,10 @@ export default function WalletsPage() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="bg-mim-surface border border-mim-border rounded-2xl p-6 w-full max-w-sm space-y-5 shadow-2xl">
-            <h3 className="text-sm font-semibold text-mim-text">Create Wallet</h3>
+            <h3 className="text-sm font-semibold text-mim-text">{t('wallets.createWallet')}</h3>
             <div className="space-y-3">
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted block mb-1">Name</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted block mb-1">{t('wallets.name')}</label>
                 <input
                   type="text"
                   value={createForm.name}
@@ -903,9 +907,9 @@ export default function WalletsPage() {
               </div>
               {(
                 [
-                  ['descriptors',        'Descriptor wallet'],
-                  ['blank',              'Blank (no keys generated)'],
-                  ['disablePrivateKeys', 'Disable private keys (watch-only)'],
+                  ['descriptors',        t('wallets.descriptorWallet')],
+                  ['blank',              t('wallets.blank')],
+                  ['disablePrivateKeys', t('wallets.disablePrivateKeys')],
                 ] as [keyof CreateForm, string][]
               ).map(([key, label]) => (
                 <label key={key} className="flex items-center gap-3 cursor-pointer">
@@ -924,14 +928,14 @@ export default function WalletsPage() {
                 onClick={() => setShowModal(false)}
                 className="flex-1 px-4 py-2 rounded-lg border border-mim-border text-mim-text-muted text-sm hover:border-mim-border-light transition-colors"
               >
-                Cancel
+                {t('wallets.cancel')}
               </button>
               <button
                 onClick={handleCreate}
                 disabled={creating || !createForm.name.trim()}
                 className="flex-1 px-4 py-2 rounded-lg bg-bitcoin-orange text-black text-sm font-semibold hover:bg-bitcoin-orange-dark disabled:opacity-50 transition-colors"
               >
-                {creating ? 'Creating…' : 'Create'}
+                {creating ? t('wallets.creating') : t('wallets.create')}
               </button>
             </div>
           </div>

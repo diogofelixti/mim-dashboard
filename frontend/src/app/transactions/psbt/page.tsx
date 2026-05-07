@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { formatHash, formatNumber } from '@/lib/formatters';
+import { useBtcUnit } from '@/hooks/useBtcUnit';
+import { usePreferences } from '@/hooks/usePreferences';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Step = 0 | 1 | 2 | 3 | 4 | 5;
@@ -56,7 +58,7 @@ type AnalyzePsbt = {
   next?: string;
 };
 
-const STEPS = ['Create', 'Review', 'Sign', 'Combine', 'Finalize', 'Broadcast'] as const;
+const STEP_KEYS = ['psbt.create', 'psbt.review', 'psbt.sign', 'psbt.combine', 'psbt.finalize', 'psbt.broadcast'] as const;
 
 // ── Small shared components ───────────────────────────────────────────────────
 function Label({ children }: { children: React.ReactNode }) {
@@ -139,12 +141,13 @@ function SuccessBox({ children }: { children: React.ReactNode }) {
 
 // ── Step Bar ──────────────────────────────────────────────────────────────────
 function StepBar({ current, onNavigate }: { current: Step; onNavigate: (s: Step) => void }) {
+  const { t } = usePreferences();
   return (
     <div className="flex items-center gap-0 mb-8">
-      {STEPS.map((label, idx) => {
+      {STEP_KEYS.map((key, idx) => {
         const done   = idx < current;
         const active = idx === current;
-        const last   = idx === STEPS.length - 1;
+        const last   = idx === STEP_KEYS.length - 1;
         const canClick = idx < current;
         return (
           <div key={idx} className="flex items-center">
@@ -163,7 +166,7 @@ function StepBar({ current, onNavigate }: { current: Step; onNavigate: (s: Step)
               <span className={`text-[9px] font-semibold uppercase tracking-wide whitespace-nowrap ${
                 active ? 'text-bitcoin-orange' : done ? 'text-mim-green' : 'text-mim-text-dim'
               }`}>
-                {label}
+                {t(key)}
               </span>
             </div>
             {!last && (
@@ -181,6 +184,8 @@ function StepCreate({ onDone, onImport }: {
   onDone: (psbt: string, wallet: string) => void;
   onImport: (psbt: string) => void;
 }) {
+  const { fmt } = useBtcUnit();
+  const { t } = usePreferences();
   const [wallets,     setWallets]     = useState<string[]>([]);
   const [wallet,      setWallet]      = useState('');
   const [outputs,     setOutputs]     = useState<PsbtOutput[]>([{ address: '', amount: '' }]);
@@ -262,7 +267,7 @@ function StepCreate({ onDone, onImport }: {
     <div className="space-y-6 max-w-2xl animate-fade-in">
       {/* Wallet selector */}
       <div>
-        <Label>Wallet</Label>
+        <Label>{t('psbt.wallet')}</Label>
         <select
           value={wallet}
           onChange={(e) => setWallet(e.target.value)}
@@ -275,8 +280,8 @@ function StepCreate({ onDone, onImport }: {
       {/* Recipients */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <Label>Recipients</Label>
-          <button onClick={addOutput} className="text-xs text-bitcoin-orange hover:underline">+ Add recipient</button>
+          <Label>{t('psbt.recipients')}</Label>
+          <button onClick={addOutput} className="text-xs text-bitcoin-orange hover:underline">{t('psbt.addRecipient')}</button>
         </div>
         {outputs.map((out, i) => (
           <div key={i} className="flex gap-2 mb-2">
@@ -304,7 +309,7 @@ function StepCreate({ onDone, onImport }: {
 
       {/* Fee */}
       <div>
-        <Label>Fee Rate</Label>
+        <Label>{t('psbt.feeRate')}</Label>
         <div className="flex gap-2 mb-2">
           <button
             onClick={() => setFeeMode('auto')}
@@ -314,7 +319,7 @@ function StepCreate({ onDone, onImport }: {
                 : 'border-mim-border text-mim-text-muted hover:border-mim-border-light'
             }`}
           >
-            Auto
+            {t('psbt.auto')}
           </button>
           <button
             onClick={() => setFeeMode('custom')}
@@ -324,7 +329,7 @@ function StepCreate({ onDone, onImport }: {
                 : 'border-mim-border text-mim-text-muted hover:border-mim-border-light'
             }`}
           >
-            Custom
+            {t('psbt.custom')}
           </button>
         </div>
         {feeMode === 'auto' && fees && (
@@ -348,30 +353,30 @@ function StepCreate({ onDone, onImport }: {
 
       {/* Options */}
       <div className="space-y-3">
-        <Label>Options</Label>
+        <Label>{t('psbt.options')}</Label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={rbf} onChange={(e) => setRbf(e.target.checked)} className="accent-bitcoin-orange w-3.5 h-3.5" />
-          <span className="text-sm text-mim-text">RBF (Replace-by-Fee)</span>
+          <span className="text-sm text-mim-text">{t('psbt.rbf')}</span>
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={useCoinCtrl} onChange={(e) => setUseCoinCtrl(e.target.checked)} className="accent-bitcoin-orange w-3.5 h-3.5" />
-          <span className="text-sm text-mim-text">Use Coin Control</span>
+          <span className="text-sm text-mim-text">{t('psbt.useCoinControl')}</span>
         </label>
         {useCoinCtrl && (
           <div className="ml-6 space-y-2">
             {coinUtxos.length > 0 ? (
               <div className="bg-bitcoin-orange/5 border border-bitcoin-orange/20 rounded-lg p-3 space-y-1">
-                <p className="text-xs text-bitcoin-orange font-semibold">{coinUtxos.length} UTXOs selected ({coinTotal.toFixed(8)} BTC)</p>
+                <p className="text-xs text-bitcoin-orange font-semibold">{t('psbt.utxosSelected', { count: coinUtxos.length, total: fmt(coinTotal) })}</p>
                 {coinUtxos.map((u) => (
                   <p key={`${u.txid}:${u.vout}`} className="text-[10px] font-mono text-mim-text-muted">
-                    {formatHash(u.txid, 8)}:{u.vout} — {u.amount.toFixed(8)} BTC
+                    {formatHash(u.txid, 8)}:{u.vout} — {fmt(u.amount)}
                   </p>
                 ))}
-                <a href="/wallets" className="text-[10px] text-bitcoin-orange hover:underline">Change selection</a>
+                <a href="/wallets" className="text-[10px] text-bitcoin-orange hover:underline">{t('psbt.changeSelection')}</a>
               </div>
             ) : (
               <p className="text-xs text-mim-text-dim">
-                No UTXOs selected. <a href="/wallets" className="text-bitcoin-orange hover:underline">Select in Wallets → Coin Control</a>
+                {t('psbt.noUtxos')} <a href="/wallets" className="text-bitcoin-orange hover:underline">{t('psbt.selectInWallets')}</a>
               </p>
             )}
           </div>
@@ -384,18 +389,18 @@ function StepCreate({ onDone, onImport }: {
           onClick={() => setShowImport(!showImport)}
           className="text-xs text-mim-text-muted hover:text-mim-text transition-colors"
         >
-          {showImport ? '▾ Hide Import' : '▸ Import Existing PSBT'}
+          {showImport ? `▾ ${t('psbt.hideImport')}` : `▸ ${t('psbt.importExisting')}`}
         </button>
         {showImport && (
           <div className="mt-2 space-y-2">
             <FieldTextarea
               rows={4}
-              placeholder="Paste PSBT base64 here…"
+              placeholder={t('psbt.pastePsbt')}
               value={importValue}
               onChange={(e) => setImportValue(e.target.value)}
             />
             <SecondaryBtn onClick={handleImportPsbt} disabled={!importValue.trim()}>
-              Load PSBT →
+              {t('psbt.loadPsbt')}
             </SecondaryBtn>
           </div>
         )}
@@ -404,7 +409,7 @@ function StepCreate({ onDone, onImport }: {
       {error && <p className="text-mim-red text-xs font-mono">{error}</p>}
 
       <PrimaryBtn onClick={handleCreate} disabled={creating || outputs.every((o) => !o.address.trim() || !o.amount.trim())}>
-        {creating ? 'Creating…' : 'Create PSBT →'}
+        {creating ? t('psbt.creating') : t('psbt.createPsbt')}
       </PrimaryBtn>
     </div>
   );
@@ -418,6 +423,8 @@ function StepReview({ psbt, decoded, analysis, onBack, onNext }: {
   onBack: () => void;
   onNext: () => void;
 }) {
+  const { fmt } = useBtcUnit();
+  const { t } = usePreferences();
   const inputs  = decoded?.tx?.vin ?? [];
   const outputs = decoded?.tx?.vout ?? [];
   const decodedInputs = decoded?.inputs ?? [];
@@ -430,12 +437,12 @@ function StepReview({ psbt, decoded, analysis, onBack, onNext }: {
       {/* Transaction preview */}
       <div className="bg-mim-surface border border-mim-border rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-mim-border">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">Transaction Preview</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">{t('psbt.txPreview')}</p>
           {(fee !== undefined || vsize) && (
             <div className="flex gap-4 mt-1 text-xs text-mim-text-muted">
-              {fee !== undefined && <span>Fee: {(fee * 1e8).toFixed(0)} sats ({fee.toFixed(8)} BTC)</span>}
-              {vsize && <span>Size: ~{vsize} vB</span>}
-              {feeRate && <span>Rate: {feeRate} sat/vB</span>}
+              {fee !== undefined && <span>{t('psbt.feeLabel')} {(fee * 1e8).toFixed(0)} sats ({fmt(fee)})</span>}
+              {vsize && <span>{t('psbt.sizeLabel')} ~{vsize} vB</span>}
+              {feeRate && <span>{t('psbt.rateLabel')} {feeRate} sat/vB</span>}
             </div>
           )}
         </div>
@@ -443,7 +450,7 @@ function StepReview({ psbt, decoded, analysis, onBack, onNext }: {
         <div className="flex gap-4 p-4 items-start">
           <div className="flex-1 space-y-1.5 min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">
-              Inputs ({inputs.length})
+              {t('txPage.inputs')} ({inputs.length})
             </p>
             {inputs.map((inp, i) => {
               const witnessUtxo = decodedInputs[i]?.witness_utxo;
@@ -453,12 +460,12 @@ function StepReview({ psbt, decoded, analysis, onBack, onNext }: {
                 <div key={i} className="bg-mim-bg border border-mim-border rounded-lg px-3 py-2 space-y-0.5">
                   <p className="text-hash text-xs font-mono truncate">{formatHash(inp.txid, 10)}:{inp.vout}</p>
                   {witnessUtxo && (
-                    <p className="text-xs font-mono text-mim-text">{witnessUtxo.amount.toFixed(8)} BTC</p>
+                    <p className="text-xs font-mono text-mim-text">{fmt(witnessUtxo.amount)}</p>
                   )}
                   <span className={`text-[9px] font-semibold ${
                     isFinal ? 'text-mim-green' : hasSig ? 'text-mim-yellow' : 'text-mim-red'
                   }`}>
-                    {isFinal ? 'signed' : hasSig ? 'partial' : 'unsigned'}
+                    {isFinal ? t('psbt.signed') : hasSig ? t('psbt.partial') : t('psbt.unsigned')}
                   </span>
                 </div>
               );
@@ -467,12 +474,12 @@ function StepReview({ psbt, decoded, analysis, onBack, onNext }: {
           <div className="flex-shrink-0 text-bitcoin-orange text-lg pt-6">→</div>
           <div className="flex-1 space-y-1.5 min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">
-              Outputs ({outputs.length})
+              {t('txPage.outputs')} ({outputs.length})
             </p>
             {outputs.map((out, i) => (
               <div key={i} className="bg-mim-bg border border-mim-border rounded-lg px-3 py-2 space-y-0.5">
                 <p className="text-hash text-xs truncate">{out.scriptPubKey?.address || 'OP_RETURN'}</p>
-                <p className="font-mono text-xs text-mim-text">{out.value.toFixed(8)} BTC</p>
+                <p className="font-mono text-xs text-mim-text">{fmt(out.value)}</p>
               </div>
             ))}
           </div>
@@ -482,16 +489,16 @@ function StepReview({ psbt, decoded, analysis, onBack, onNext }: {
       {/* Analysis next role */}
       {analysis?.next && (
         <div className="text-xs text-mim-text-muted">
-          Next step: <span className="font-semibold text-bitcoin-orange">{analysis.next}</span>
+          {t('psbt.nextStep')} <span className="font-semibold text-bitcoin-orange">{analysis.next}</span>
         </div>
       )}
 
       {/* Raw PSBT */}
-      <CopyBox value={psbt} label="PSBT (Base64)" />
+      <CopyBox value={psbt} label={t('psbt.psbtBase64')} />
 
       <div className="flex gap-2">
-        <SecondaryBtn onClick={onBack}>← Back</SecondaryBtn>
-        <PrimaryBtn onClick={onNext}>Sign →</PrimaryBtn>
+        <SecondaryBtn onClick={onBack}>{t('psbt.back')}</SecondaryBtn>
+        <PrimaryBtn onClick={onNext}>{t('psbt.signNext')}</PrimaryBtn>
       </div>
     </div>
   );
@@ -505,6 +512,7 @@ function StepSign({ psbt, wallet, onSigned, onBack, onSkipToFinalize }: {
   onBack: () => void;
   onSkipToFinalize: (psbt: string) => void;
 }) {
+  const { t } = usePreferences();
   const [signing,    setSigning]    = useState(false);
   const [signResult, setSignResult] = useState<{ psbt: string; complete: boolean } | null>(null);
   const [error,      setError]      = useState('');
@@ -557,8 +565,8 @@ function StepSign({ psbt, wallet, onSigned, onBack, onSkipToFinalize }: {
       {/* Tab choice */}
       <div className="flex gap-1 bg-mim-surface border border-mim-border rounded-xl p-1 w-fit">
         {([
-          { id: 'wallet' as const,   label: 'Sign with Wallet' },
-          { id: 'external' as const, label: 'Sign Externally' },
+          { id: 'wallet' as const,   label: t('psbt.signWallet') },
+          { id: 'external' as const, label: t('psbt.signExternal') },
         ]).map(({ id, label }) => (
           <button
             key={id}
@@ -575,12 +583,12 @@ function StepSign({ psbt, wallet, onSigned, onBack, onSkipToFinalize }: {
       {tab === 'wallet' && (
         <div className="space-y-4">
           <p className="text-xs text-mim-text-muted">
-            Sign with wallet <span className="font-semibold text-mim-text">{wallet || '(default)'}</span> on this node.
+            {t('psbt.signWith', { wallet: wallet || '(default)' })}
           </p>
 
           {!signResult && (
             <PrimaryBtn onClick={handleSign} disabled={signing}>
-              {signing ? 'Signing…' : 'Sign with Wallet'}
+              {signing ? t('psbt.signing') : t('psbt.signWallet')}
             </PrimaryBtn>
           )}
 
@@ -590,26 +598,26 @@ function StepSign({ psbt, wallet, onSigned, onBack, onSkipToFinalize }: {
             <div className="space-y-3">
               {signResult.complete ? (
                 <SuccessBox>
-                  <p className="text-mim-green font-semibold">Fully signed!</p>
-                  <p className="text-mim-text-muted mt-1">All required signatures are present. Ready to finalize.</p>
+                  <p className="text-mim-green font-semibold">{t('psbt.fullySigned')}</p>
+                  <p className="text-mim-text-muted mt-1">{t('psbt.allSigsPresent')}</p>
                 </SuccessBox>
               ) : (
                 <WarningBox>
-                  <p className="text-mim-yellow font-semibold">Partially signed</p>
-                  <p className="text-mim-text-muted mt-1">Additional signatures required. Export and sign with other devices/wallets.</p>
+                  <p className="text-mim-yellow font-semibold">{t('psbt.partiallySigned')}</p>
+                  <p className="text-mim-text-muted mt-1">{t('psbt.additionalSigs')}</p>
                 </WarningBox>
               )}
 
-              <CopyBox value={signResult.psbt} label="Signed PSBT" />
+              <CopyBox value={signResult.psbt} label={t('psbt.signedPsbt')} />
 
               <div className="flex gap-2">
                 {signResult.complete ? (
                   <PrimaryBtn onClick={() => onSkipToFinalize(signResult.psbt)}>
-                    Finalize →
+                    {t('psbt.finalizeNext')}
                   </PrimaryBtn>
                 ) : (
                   <PrimaryBtn onClick={() => onSigned(signResult.psbt, signResult.complete)}>
-                    Continue to Combine →
+                    {t('psbt.continueCombine')}
                   </PrimaryBtn>
                 )}
               </div>
@@ -621,20 +629,20 @@ function StepSign({ psbt, wallet, onSigned, onBack, onSkipToFinalize }: {
       {tab === 'external' && (
         <div className="space-y-4">
           <p className="text-xs text-mim-text-muted">
-            Export this PSBT to sign with a hardware wallet or another device.
+            {t('psbt.exportSign')}
           </p>
 
-          <CopyBox value={psbt} label="PSBT to sign" />
+          <CopyBox value={psbt} label={t('psbt.psbtToSign')} />
 
           <div className="flex gap-2 flex-wrap">
-            <SecondaryBtn onClick={handleQR}>QR Code</SecondaryBtn>
-            <SecondaryBtn onClick={handleDownload}>Download .psbt</SecondaryBtn>
+            <SecondaryBtn onClick={handleQR}>{t('psbt.qrCode')}</SecondaryBtn>
+            <SecondaryBtn onClick={handleDownload}>{t('psbt.downloadPsbt')}</SecondaryBtn>
           </div>
 
           {qr === 'too-large' && (
             <WarningBox>
-              <p className="font-semibold text-mim-yellow">PSBT too large for QR code</p>
-              <p className="text-mim-text-muted mt-1">Use copy/paste or download the .psbt file instead.</p>
+              <p className="font-semibold text-mim-yellow">{t('psbt.qrTooLarge')}</p>
+              <p className="text-mim-text-muted mt-1">{t('psbt.qrUseAlt')}</p>
             </WarningBox>
           )}
           {qr && qr !== 'too-large' && (
@@ -644,22 +652,22 @@ function StepSign({ psbt, wallet, onSigned, onBack, onSkipToFinalize }: {
           )}
 
           <div className="space-y-2 pt-4 border-t border-mim-border">
-            <Label>Import signed PSBT</Label>
+            <Label>{t('psbt.importSigned')}</Label>
             <FieldTextarea
               rows={4}
-              placeholder="Paste the signed PSBT here…"
+              placeholder={t('psbt.pasteSignedPsbt')}
               value={importVal}
               onChange={(e) => setImportVal(e.target.value)}
             />
             <PrimaryBtn onClick={handleImportSigned} disabled={!importVal.trim()}>
-              Import Signed PSBT →
+              {t('psbt.importSignedBtn')}
             </PrimaryBtn>
           </div>
         </div>
       )}
 
       <div className="pt-2">
-        <SecondaryBtn onClick={onBack}>← Back</SecondaryBtn>
+        <SecondaryBtn onClick={onBack}>{t('psbt.back')}</SecondaryBtn>
       </div>
     </div>
   );
@@ -672,6 +680,7 @@ function StepCombine({ psbt, onCombined, onSkip, onBack }: {
   onSkip: () => void;
   onBack: () => void;
 }) {
+  const { t } = usePreferences();
   const [additionalPsbts, setAdditionalPsbts] = useState<string[]>([]);
   const [newPsbt,         setNewPsbt]         = useState('');
   const [combining,       setCombining]       = useState(false);
@@ -704,15 +713,14 @@ function StepCombine({ psbt, onCombined, onSkip, onBack }: {
   return (
     <div className="space-y-5 max-w-2xl animate-fade-in">
       <p className="text-xs text-mim-text-muted">
-        For multisig or multi-party transactions, combine multiple signed PSBTs here.
-        If this is a single-signer transaction, skip this step.
+        {t('psbt.combineDesc')}
       </p>
 
-      <CopyBox value={psbt} label="Current PSBT" />
+      <CopyBox value={psbt} label={t('psbt.currentPsbt')} />
 
       {/* Additional PSBTs */}
       <div className="space-y-2">
-        <Label>Add signed PSBTs</Label>
+        <Label>{t('psbt.addSignedPsbts')}</Label>
         {additionalPsbts.map((p, i) => (
           <div key={i} className="flex items-center gap-2 bg-mim-bg border border-mim-border rounded-lg px-3 py-2">
             <span className="text-[10px] font-mono text-hash flex-1 truncate">{formatHash(p, 20)}</span>
@@ -722,23 +730,23 @@ function StepCombine({ psbt, onCombined, onSkip, onBack }: {
         <div className="flex gap-2">
           <FieldTextarea
             rows={3}
-            placeholder="Paste another signed PSBT…"
+            placeholder={t('psbt.pasteAnotherPsbt')}
             value={newPsbt}
             onChange={(e) => setNewPsbt(e.target.value)}
             className="flex-1"
           />
         </div>
-        <SecondaryBtn onClick={addPsbt} disabled={!newPsbt.trim()}>+ Add PSBT</SecondaryBtn>
+        <SecondaryBtn onClick={addPsbt} disabled={!newPsbt.trim()}>{t('psbt.addPsbt')}</SecondaryBtn>
       </div>
 
       {error && <p className="text-mim-red text-xs font-mono">{error}</p>}
 
       <div className="flex gap-2">
-        <SecondaryBtn onClick={onBack}>← Back</SecondaryBtn>
-        <SecondaryBtn onClick={onSkip}>Skip → Finalize</SecondaryBtn>
+        <SecondaryBtn onClick={onBack}>{t('psbt.back')}</SecondaryBtn>
+        <SecondaryBtn onClick={onSkip}>{t('psbt.skipFinalize')}</SecondaryBtn>
         {additionalPsbts.length > 0 && (
           <PrimaryBtn onClick={handleCombine} disabled={combining}>
-            {combining ? 'Combining…' : `Combine ${additionalPsbts.length + 1} PSBTs →`}
+            {combining ? t('psbt.combining') : t('psbt.combinePsbts', { count: additionalPsbts.length + 1 })}
           </PrimaryBtn>
         )}
       </div>
@@ -752,6 +760,7 @@ function StepFinalize({ psbt, onFinalized, onBack }: {
   onFinalized: (hex: string) => void;
   onBack: () => void;
 }) {
+  const { t } = usePreferences();
   const [finalizing, setFinalizing] = useState(false);
   const [rawHex,     setRawHex]     = useState('');
   const [error,      setError]      = useState('');
@@ -784,12 +793,12 @@ function StepFinalize({ psbt, onFinalized, onBack }: {
   return (
     <div className="space-y-5 max-w-2xl animate-fade-in">
       <p className="text-xs text-mim-text-muted">
-        Finalize the PSBT to produce a raw transaction ready for broadcast.
+        {t('psbt.finalizeDesc')}
       </p>
 
       {!rawHex && !incomplete && (
         <PrimaryBtn onClick={handleFinalize} disabled={finalizing}>
-          {finalizing ? 'Finalizing…' : 'Finalize PSBT'}
+          {finalizing ? t('psbt.finalizing') : t('psbt.finalizePsbt')}
         </PrimaryBtn>
       )}
 
@@ -798,40 +807,40 @@ function StepFinalize({ psbt, onFinalized, onBack }: {
       {incomplete && (
         <div className="space-y-3">
           <div className="bg-mim-red/10 border border-mim-red/30 rounded-xl p-4">
-            <p className="text-mim-red text-xs font-semibold">Cannot finalize — missing signatures</p>
+            <p className="text-mim-red text-xs font-semibold">{t('psbt.cannotFinalize')}</p>
             {analysis?.inputs && (
               <div className="mt-2 space-y-1">
                 {analysis.inputs.map((inp, i) => (
                   <p key={i} className={`text-[10px] font-mono ${inp.is_final ? 'text-mim-green' : 'text-mim-red'}`}>
-                    Input #{i}: {inp.is_final ? 'ready' : `needs ${inp.next ?? 'signing'}`}
-                    {inp.missing?.signatures && ` (${inp.missing.signatures.length} sig missing)`}
+                    Input #{i}: {inp.is_final ? t('psbt.inputReady') : t('psbt.inputNeeds', { next: inp.next ?? 'signing' })}
+                    {inp.missing?.signatures && ` (${t('psbt.sigMissing', { count: inp.missing.signatures.length })})`}
                   </p>
                 ))}
               </div>
             )}
           </div>
-          <SecondaryBtn onClick={onBack}>← Back to Sign</SecondaryBtn>
+          <SecondaryBtn onClick={onBack}>{t('psbt.backToSign')}</SecondaryBtn>
         </div>
       )}
 
       {rawHex && (
         <div className="space-y-3">
           <SuccessBox>
-            <p className="text-mim-green font-semibold">Transaction finalized!</p>
-            <p className="text-mim-text-muted mt-1">Ready to broadcast to the network.</p>
+            <p className="text-mim-green font-semibold">{t('psbt.txFinalized')}</p>
+            <p className="text-mim-text-muted mt-1">{t('psbt.readyBroadcast')}</p>
           </SuccessBox>
 
-          <CopyBox value={rawHex} label="Raw Transaction Hex" />
+          <CopyBox value={rawHex} label={t('psbt.rawTxHex')} />
 
           <div className="flex gap-2">
-            <SecondaryBtn onClick={onBack}>← Back</SecondaryBtn>
-            <PrimaryBtn onClick={() => onFinalized(rawHex)}>Broadcast →</PrimaryBtn>
+            <SecondaryBtn onClick={onBack}>{t('psbt.back')}</SecondaryBtn>
+            <PrimaryBtn onClick={() => onFinalized(rawHex)}>{t('psbt.broadcastNext')}</PrimaryBtn>
           </div>
         </div>
       )}
 
       {!rawHex && !incomplete && (
-        <SecondaryBtn onClick={onBack}>← Back</SecondaryBtn>
+        <SecondaryBtn onClick={onBack}>{t('psbt.back')}</SecondaryBtn>
       )}
     </div>
   );
@@ -843,6 +852,7 @@ function StepBroadcast({ hex, onBack, onReset }: {
   onBack: () => void;
   onReset: () => void;
 }) {
+  const { t } = usePreferences();
   const [sending,  setSending]  = useState(false);
   const [txid,     setTxid]     = useState('');
   const [error,    setError]    = useState('');
@@ -864,12 +874,12 @@ function StepBroadcast({ hex, onBack, onReset }: {
     return (
       <div className="space-y-5 max-w-2xl animate-fade-in">
         <SuccessBox>
-          <p className="text-mim-green font-semibold text-sm">Transaction broadcast!</p>
-          <p className="text-mim-text-muted mt-1">Your transaction has been submitted to the Bitcoin network.</p>
+          <p className="text-mim-green font-semibold text-sm">{t('psbt.txBroadcast')}</p>
+          <p className="text-mim-text-muted mt-1">{t('psbt.txSubmitted')}</p>
         </SuccessBox>
 
         <div className="bg-mim-surface border border-mim-border rounded-xl p-4 space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">Transaction ID</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">{t('psbt.txId')}</p>
           <p className="text-hash font-mono text-xs break-all">{txid}</p>
         </div>
 
@@ -878,9 +888,9 @@ function StepBroadcast({ hex, onBack, onReset }: {
             href={`/explorer/tx/${txid}`}
             className="px-5 py-2.5 rounded-lg bg-bitcoin-orange text-black text-sm font-semibold hover:bg-bitcoin-orange-dark transition-colors inline-block"
           >
-            View in Explorer
+            {t('psbt.viewExplorer')}
           </a>
-          <SecondaryBtn onClick={onReset}>Create Another</SecondaryBtn>
+          <SecondaryBtn onClick={onReset}>{t('psbt.createAnother')}</SecondaryBtn>
         </div>
       </div>
     );
@@ -889,22 +899,22 @@ function StepBroadcast({ hex, onBack, onReset }: {
   return (
     <div className="space-y-5 max-w-2xl animate-fade-in">
       <WarningBox>
-        <p className="font-semibold text-mim-yellow">This action is irreversible</p>
-        <p className="text-mim-text-muted mt-1">The transaction will be sent to the Bitcoin network and cannot be undone.</p>
+        <p className="font-semibold text-mim-yellow">{t('psbt.irreversible')}</p>
+        <p className="text-mim-text-muted mt-1">{t('psbt.irreversibleDesc')}</p>
       </WarningBox>
 
-      <CopyBox value={hex} label="Raw Transaction" />
+      <CopyBox value={hex} label={t('psbt.rawTx')} />
 
       {error && <p className="text-mim-red text-xs font-mono">{error}</p>}
 
       <div className="flex gap-2">
-        <SecondaryBtn onClick={onBack}>← Back</SecondaryBtn>
+        <SecondaryBtn onClick={onBack}>{t('psbt.back')}</SecondaryBtn>
         <button
           onClick={handleBroadcast}
           disabled={sending}
           className="flex-1 py-3 rounded-xl bg-bitcoin-orange text-black font-semibold text-sm hover:bg-bitcoin-orange-dark disabled:opacity-50 transition-colors"
         >
-          {sending ? 'Broadcasting…' : 'Broadcast Transaction'}
+          {sending ? t('txPage.broadcasting') : t('psbt.broadcastTx')}
         </button>
       </div>
     </div>
@@ -913,6 +923,7 @@ function StepBroadcast({ hex, onBack, onReset }: {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function PsbtPage() {
+  const { t } = usePreferences();
   const [step,       setStep]       = useState<Step>(0);
   const [psbtHex,    setPsbtHex]    = useState('');
   const [signedPsbt, setSignedPsbt] = useState('');
@@ -992,10 +1003,10 @@ export default function PsbtPage() {
   return (
     <div className="max-w-3xl">
       <div className="flex items-center justify-between mb-2">
-        <h1 className="text-sm font-semibold text-mim-text">PSBT Workflow</h1>
+        <h1 className="text-sm font-semibold text-mim-text">{t('psbt.title')}</h1>
         {step > 0 && (
           <button onClick={reset} className="text-xs text-mim-text-muted hover:text-mim-text transition-colors">
-            ↩ Start over
+            {t('psbt.startOver')}
           </button>
         )}
       </div>

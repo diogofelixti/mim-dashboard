@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { useBtcUnit } from '@/hooks/useBtcUnit';
+import { usePreferences } from '@/hooks/usePreferences';
+import type { BtcUnit } from '@/lib/formatters';
+import type { Lang } from '@/lib/i18n';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type RpcInfo = {
@@ -14,6 +18,8 @@ type RpcInfo = {
 type Prefs = {
   theme: 'dark' | 'light';
   currency: 'usd' | 'brl' | 'eur';
+  btcUnit: BtcUnit;
+  language: Lang;
 };
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
@@ -56,6 +62,7 @@ function SaveBtn({ loading, label = 'Save' }: { loading?: boolean; label?: strin
 
 // ── bitcoin.conf editor ───────────────────────────────────────────────────────
 function BitcoinConfEditor() {
+  const { t } = usePreferences();
   const [conf,    setConf]    = useState('');
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
@@ -101,7 +108,7 @@ function BitcoinConfEditor() {
             <span className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">
               bitcoin.conf
             </span>
-            <span className="text-[10px] text-mim-text-dim">read-only (host mount)</span>
+            <span className="text-[10px] text-mim-text-dim">{t('settings.readOnly')}</span>
           </div>
           <pre className="px-4 py-3 text-sm font-mono leading-relaxed overflow-x-auto max-h-[500px] overflow-y-auto">
             {highlight(conf)}
@@ -114,7 +121,9 @@ function BitcoinConfEditor() {
 
 // ── Preferences ───────────────────────────────────────────────────────────────
 function PreferencesSection() {
-  const [prefs,   setPrefs]   = useState<Prefs>({ theme: 'dark', currency: 'usd' });
+  const { setUnit } = useBtcUnit();
+  const { setTheme, setCurrency, setLanguage, t } = usePreferences();
+  const [prefs,   setPrefs]   = useState<Prefs>({ theme: 'dark', currency: 'usd', btcUnit: 'BTC', language: 'en' });
   const [saving,  setSaving]  = useState(false);
   const [notice,  setNotice]  = useState('');
   const [error,   setError]   = useState('');
@@ -133,7 +142,11 @@ function PreferencesSection() {
         method: 'PUT',
         body: JSON.stringify(prefs),
       });
-      setNotice('Preferences saved.');
+      setUnit(prefs.btcUnit);
+      setTheme(prefs.theme);
+      setCurrency(prefs.currency);
+      setLanguage(prefs.language);
+      setNotice(t('settings.saved'));
       setTimeout(() => setNotice(''), 3000);
     } catch (ex: unknown) { setError((ex as Error).message); }
     finally { setSaving(false); }
@@ -145,27 +158,47 @@ function PreferencesSection() {
       {notice && <p className="text-mim-green text-xs font-mono">{notice}</p>}
 
       <div>
-        <Label>Theme</Label>
+        <Label>{t('settings.language')}</Label>
         <div className="flex gap-2">
-          {(['dark', 'light'] as const).map((t) => (
+          {([['en', 'English'], ['pt', 'Português']] as const).map(([id, label]) => (
             <button
-              key={t}
+              key={id}
               type="button"
-              onClick={() => setPrefs((p) => ({ ...p, theme: t }))}
-              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors capitalize ${
-                prefs.theme === t
+              onClick={() => setPrefs((p) => ({ ...p, language: id }))}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                prefs.language === id
                   ? 'bg-bitcoin-orange text-black border-bitcoin-orange'
                   : 'border-mim-border text-mim-text-muted hover:border-mim-border-light'
               }`}
             >
-              {t === 'dark' ? '🌑 Dark' : '☀️ Light'}
+              {label}
             </button>
           ))}
         </div>
       </div>
 
       <div>
-        <Label>Default Currency</Label>
+        <Label>{t('settings.theme')}</Label>
+        <div className="flex gap-2">
+          {(['dark', 'light'] as const).map((th) => (
+            <button
+              key={th}
+              type="button"
+              onClick={() => setPrefs((p) => ({ ...p, theme: th }))}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors capitalize ${
+                prefs.theme === th
+                  ? 'bg-bitcoin-orange text-black border-bitcoin-orange'
+                  : 'border-mim-border text-mim-text-muted hover:border-mim-border-light'
+              }`}
+            >
+              {th === 'dark' ? t('settings.dark') : t('settings.light')}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <Label>{t('settings.currency')}</Label>
         <div className="flex gap-2">
           {([['usd', 'USD $'], ['brl', 'BRL R$'], ['eur', 'EUR €']] as const).map(([id, label]) => (
             <button
@@ -184,13 +217,34 @@ function PreferencesSection() {
         </div>
       </div>
 
-      <SaveBtn loading={saving} />
+      <div>
+        <Label>{t('settings.btcUnit')}</Label>
+        <div className="flex gap-2">
+          {([['BTC', '₿ BTC (0.00100000)'], ['sats', 'sats (100,000)']] as [BtcUnit, string][]).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setPrefs((p) => ({ ...p, btcUnit: id }))}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                prefs.btcUnit === id
+                  ? 'bg-bitcoin-orange text-black border-bitcoin-orange'
+                  : 'border-mim-border text-mim-text-muted hover:border-mim-border-light'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <SaveBtn loading={saving} label={t('settings.save')} />
     </form>
   );
 }
 
 // ── RPC Connection ────────────────────────────────────────────────────────────
 function RpcInfoSection() {
+  const { t } = usePreferences();
   const [info,    setInfo]    = useState<RpcInfo | null>(null);
   const [testing, setTesting] = useState(false);
   const [error,   setError]   = useState('');
@@ -207,7 +261,7 @@ function RpcInfoSection() {
     setStatus('');
     try {
       await api('/api/settings/rpc/test', { method: 'POST' });
-      setStatus('✓ Connection OK');
+      setStatus(t('settings.connectionOk'));
     } catch (ex: unknown) { setStatus(`✗ ${(ex as Error).message}`); }
     finally { setTesting(false); }
   }
@@ -219,14 +273,14 @@ function RpcInfoSection() {
       {info ? (
         <div className="bg-mim-surface border border-mim-border rounded-xl overflow-hidden">
           {[
-            ['Host',    info.host],
-            ['Port',    String(info.port)],
-            ['Network', info.network],
-            ['Status',  info.connected ? '🟢 Connected' : '🔴 Disconnected'],
+            [t('settings.host'),    info.host],
+            [t('settings.port'),    String(info.port)],
+            [t('settings.network'), info.network],
+            [t('settings.status'),  info.connected ? t('settings.connected') : t('settings.disconnected')],
           ].map(([k, v]) => (
             <div key={k} className="flex items-center justify-between px-4 py-3 border-b border-mim-border last:border-0">
               <span className="text-xs text-mim-text-muted font-semibold uppercase tracking-widest">{k}</span>
-              <span className={`text-sm font-mono ${k === 'Status' ? (info.connected ? 'text-mim-green' : 'text-mim-red') : 'text-mim-text'}`}>
+              <span className={`text-sm font-mono ${k === t('settings.status') ? (info.connected ? 'text-mim-green' : 'text-mim-red') : 'text-mim-text'}`}>
                 {v}
               </span>
             </div>
@@ -242,7 +296,7 @@ function RpcInfoSection() {
           disabled={testing}
           className="px-4 py-2 rounded-lg border border-mim-border text-mim-text-muted text-sm hover:border-mim-border-light hover:text-mim-text disabled:opacity-50 transition-colors"
         >
-          {testing ? 'Testing…' : 'Test Connection'}
+          {testing ? t('settings.testing') : t('settings.testConnection')}
         </button>
         {status && (
           <span className={`text-xs font-mono ${status.startsWith('✓') ? 'text-mim-green' : 'text-mim-red'}`}>
@@ -256,6 +310,7 @@ function RpcInfoSection() {
 
 // ── Change Password ───────────────────────────────────────────────────────────
 function ChangePasswordSection() {
+  const { t } = usePreferences();
   const [current, setCurrent]   = useState('');
   const [next,    setNext]      = useState('');
   const [confirm, setConfirm]   = useState('');
@@ -265,8 +320,8 @@ function ChangePasswordSection() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (next !== confirm) { setError('Passwords do not match.'); return; }
-    if (next.length < 8)  { setError('Password must be at least 8 characters.'); return; }
+    if (next !== confirm) { setError(t('settings.passwordMismatch')); return; }
+    if (next.length < 8)  { setError(t('settings.passwordMin')); return; }
     setSaving(true);
     setError('');
     try {
@@ -277,7 +332,7 @@ function ChangePasswordSection() {
       setCurrent('');
       setNext('');
       setConfirm('');
-      setNotice('Password changed.');
+      setNotice(t('settings.passwordChanged'));
       setTimeout(() => setNotice(''), 3000);
     } catch (ex: unknown) { setError((ex as Error).message); }
     finally { setSaving(false); }
@@ -289,19 +344,19 @@ function ChangePasswordSection() {
       {notice && <p className="text-mim-green text-xs font-mono">{notice}</p>}
 
       <div>
-        <Label>Current password</Label>
+        <Label>{t('settings.currentPassword')}</Label>
         <FieldInput type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
       </div>
       <div>
-        <Label>New password</Label>
+        <Label>{t('settings.newPassword')}</Label>
         <FieldInput type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
       </div>
       <div>
-        <Label>Confirm new password</Label>
+        <Label>{t('settings.confirmPassword')}</Label>
         <FieldInput type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
       </div>
 
-      <SaveBtn loading={saving} label="Change Password" />
+      <SaveBtn loading={saving} label={t('settings.changePassword')} />
     </form>
   );
 }
@@ -309,21 +364,22 @@ function ChangePasswordSection() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 type Section = 'conf' | 'prefs' | 'rpc' | 'password';
 
-const NAV: { id: Section; label: string }[] = [
-  { id: 'conf',     label: 'bitcoin.conf' },
-  { id: 'prefs',    label: 'Preferences' },
-  { id: 'rpc',      label: 'RPC Connection' },
-  { id: 'password', label: 'Change Password' },
+const NAV_KEYS: { id: Section; i18nKey: string }[] = [
+  { id: 'conf',     i18nKey: 'settings.bitcoinConf' },
+  { id: 'prefs',    i18nKey: 'settings.preferences' },
+  { id: 'rpc',      i18nKey: 'settings.rpcConnection' },
+  { id: 'password', i18nKey: 'settings.changePassword' },
 ];
 
 export default function SettingsPage() {
+  const { t } = usePreferences();
   const [section, setSection] = useState<Section>('conf');
 
   return (
     <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 max-w-5xl">
       {/* Sidebar nav */}
       <nav className="w-full sm:w-44 flex-shrink-0 flex sm:flex-col gap-1 overflow-x-auto pb-2 sm:pb-0">
-        {NAV.map(({ id, label }) => (
+        {NAV_KEYS.map(({ id, i18nKey }) => (
           <button
             key={id}
             onClick={() => setSection(id)}
@@ -333,14 +389,14 @@ export default function SettingsPage() {
                 : 'text-mim-text-muted hover:text-mim-text hover:bg-mim-surface'
             }`}
           >
-            {label}
+            {t(i18nKey)}
           </button>
         ))}
       </nav>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <SectionTitle>{NAV.find((n) => n.id === section)?.label}</SectionTitle>
+        <SectionTitle>{t(NAV_KEYS.find((n) => n.id === section)!.i18nKey)}</SectionTitle>
         {section === 'conf'     && <BitcoinConfEditor />}
         {section === 'prefs'    && <PreferencesSection />}
         {section === 'rpc'      && <RpcInfoSection />}

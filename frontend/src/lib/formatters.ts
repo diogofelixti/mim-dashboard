@@ -9,6 +9,16 @@ export function formatSats(sats: number): string {
   return sats.toLocaleString('en-US') + ' sats';
 }
 
+export type BtcUnit = 'BTC' | 'sats';
+
+export function formatBtcValue(btcAmount: number, unit: BtcUnit = 'BTC'): string {
+  if (unit === 'sats') {
+    const sats = Math.round(btcAmount * BTC_SATS);
+    return sats.toLocaleString('en-US') + ' sats';
+  }
+  return btcAmount.toFixed(8) + ' BTC';
+}
+
 export function formatNumber(value: number, decimals = 0): string {
   return value.toLocaleString('en-US', {
     minimumFractionDigits: decimals,

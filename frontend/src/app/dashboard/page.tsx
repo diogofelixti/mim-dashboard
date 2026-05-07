@@ -11,6 +11,8 @@ import {
   formatUptime,
   formatDifficulty,
 } from '@/lib/formatters';
+import { useBtcUnit } from '@/hooks/useBtcUnit';
+import { usePreferences } from '@/hooks/usePreferences';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -151,6 +153,7 @@ function formatChartTime(ts: string, range: FeeRange) {
 }
 
 function FeeHistoryChart() {
+  const { t } = usePreferences();
   const [range,    setRange]    = useState<FeeRange>('24');
   const [data,     setData]     = useState<FeeHistoryRow[]>([]);
   const [loading,  setLoading]  = useState(true);
@@ -210,7 +213,7 @@ function FeeHistoryChart() {
   };
 
   return (
-    <Card title="Fee History" accent="📈">
+    <Card title={t('dash.feeHistory')} accent="📈">
       {/* Controls */}
       <div className="flex items-center justify-between">
         <div className="flex gap-1">
@@ -242,11 +245,11 @@ function FeeHistoryChart() {
       {/* Chart */}
       {loading ? (
         <div className="h-52 flex items-center justify-center">
-          <span className="text-xs text-mim-text-muted animate-pulse">Loading fee data…</span>
+          <span className="text-xs text-mim-text-muted animate-pulse">{t('dash.loadingFees')}</span>
         </div>
       ) : chartData.length < 2 ? (
         <div className="h-52 flex items-center justify-center">
-          <span className="text-xs text-mim-text-dim">Not enough data yet. Fees are recorded every 5 minutes.</span>
+          <span className="text-xs text-mim-text-dim">{t('dash.notEnoughData')}</span>
         </div>
       ) : (
         <div className="h-52 -mx-2">
@@ -337,6 +340,8 @@ function FeeHistoryChart() {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const { fmt } = useBtcUnit();
+  const { t } = usePreferences();
   const [status,  setStatus]  = useState<NodeStatus | null>(null);
   const [fees,    setFees]    = useState<Fees | null>(null);
   const [block,   setBlock]   = useState<LatestBlock | null>(null);
@@ -385,7 +390,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-mim-text-muted text-sm">
-        <span className="animate-pulse">Loading node data…</span>
+        <span className="animate-pulse">{t('dash.loading')}</span>
       </div>
     );
   }
@@ -399,7 +404,7 @@ export default function DashboardPage() {
             onClick={fetchStatus}
             className="text-xs text-bitcoin-orange hover:underline"
           >
-            Retry
+            {t('dash.retry')}
           </button>
         </div>
       </div>
@@ -421,10 +426,10 @@ export default function DashboardPage() {
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 
       {/* Node Info */}
-      <Card title="Node Info" accent="🖥️">
+      <Card title={t('dash.nodeInfo')} accent="🖥️">
         <div className="flex items-end justify-between">
           <div>
-            <Label>Height</Label>
+            <Label>{t('dash.height')}</Label>
             <BigValue>{bc?.blocks ?? 0}</BigValue>
           </div>
           <span
@@ -434,7 +439,7 @@ export default function DashboardPage() {
                 : 'bg-yellow-500/10 text-mim-yellow'
             }`}
           >
-            {synced ? 'Synced' : `${sync.toFixed(2)}%`}
+            {synced ? t('dash.synced') : `${sync.toFixed(2)}%`}
           </span>
         </div>
 
@@ -447,78 +452,78 @@ export default function DashboardPage() {
         </div>
 
         <div className="space-y-0">
-          <Row label="Chain"    value={bc?.chain ?? '—'} mono />
-          <Row label="Headers"  value={formatNumber(bc?.headers ?? 0)} />
-          <Row label="Uptime"   value={formatUptime(status?.uptime ?? 0)} />
-          <Row label="Version"  value={net?.subversion ?? '—'} mono />
+          <Row label={t('dash.chain')}    value={bc?.chain ?? '—'} mono />
+          <Row label={t('dash.headers')}  value={formatNumber(bc?.headers ?? 0)} />
+          <Row label={t('dash.uptime')}   value={formatUptime(status?.uptime ?? 0)} />
+          <Row label={t('dash.version')}  value={net?.subversion ?? '—'} mono />
         </div>
       </Card>
 
       {/* Blockchain */}
-      <Card title="Blockchain" accent="⛓️">
+      <Card title={t('dash.blockchain')} accent="⛓️">
         <div>
-          <Label>Difficulty</Label>
+          <Label>{t('dash.difficulty')}</Label>
           <BigValue>{formatDifficulty(bc?.difficulty ?? 0)}</BigValue>
         </div>
         <div className="space-y-0">
-          <Row label="Best Hash"    value={formatHash(bc?.bestblockhash ?? '', 8)} mono />
-          <Row label="Size on Disk" value={formatBytes(bc?.size_on_disk ?? 0)} />
-          <Row label="Protocol"     value={net?.protocolversion ?? '—'} />
+          <Row label={t('dash.bestHash')}    value={formatHash(bc?.bestblockhash ?? '', 8)} mono />
+          <Row label={t('dash.sizeOnDisk')} value={formatBytes(bc?.size_on_disk ?? 0)} />
+          <Row label={t('dash.protocol')}     value={net?.protocolversion ?? '—'} />
         </div>
       </Card>
 
       {/* Mempool */}
-      <Card title="Mempool" accent="📦">
+      <Card title={t('dash.mempool')} accent="📦">
         <div className="flex gap-6">
           <div>
-            <Label>Transactions</Label>
+            <Label>{t('dash.transactions')}</Label>
             <BigValue>{formatNumber(mem?.size ?? 0)}</BigValue>
           </div>
           <div>
-            <Label>Size</Label>
+            <Label>{t('dash.size')}</Label>
             <BigValue className="text-xl">{formatBytes(mem?.bytes ?? 0)}</BigValue>
           </div>
         </div>
         <div className="space-y-0">
           <Row
-            label="Min Fee"
+            label={t('dash.minFee')}
             value={`${((mem?.mempoolminfee ?? 0) * 1e5).toFixed(1)} sat/vB`}
             mono
           />
-          <Row label="Usage" value={formatBytes(mem?.usage ?? 0)} />
-          <Row label="Pooled Txs" value={formatNumber(status?.mining?.pooledtx ?? 0)} />
+          <Row label={t('dash.usage')} value={formatBytes(mem?.usage ?? 0)} />
+          <Row label={t('dash.pooledTxs')} value={formatNumber(status?.mining?.pooledtx ?? 0)} />
         </div>
       </Card>
 
       {/* Network */}
-      <Card title="Network" accent="🌐">
+      <Card title={t('dash.network')} accent="🌐">
         <div className="flex gap-6">
           <div>
-            <Label>Connections</Label>
+            <Label>{t('dash.connections')}</Label>
             <BigValue>{net?.connections ?? 0}</BigValue>
           </div>
           <div className="flex gap-4 self-end mb-1">
             <span className="text-xs text-mim-green font-mono">
-              ↓ {net?.connections_in ?? 0} in
+              ↓ {net?.connections_in ?? 0} {t('dash.in')}
             </span>
             <span className="text-xs text-bitcoin-orange font-mono">
-              ↑ {net?.connections_out ?? 0} out
+              ↑ {net?.connections_out ?? 0} {t('dash.out')}
             </span>
           </div>
         </div>
         <div className="space-y-0">
-          <Row label="Sent"     value={formatBytes(net?.totalbytessent ?? 0)} />
-          <Row label="Received" value={formatBytes(net?.totalbytesrecv ?? 0)} />
+          <Row label={t('dash.sent')}     value={formatBytes(net?.totalbytessent ?? 0)} />
+          <Row label={t('dash.received')} value={formatBytes(net?.totalbytesrecv ?? 0)} />
         </div>
       </Card>
 
       {/* Fee Estimates */}
-      <Card title="Fee Estimates" accent="💸">
+      <Card title={t('dash.feeEstimates')} accent="💸">
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Next Block', key: 'fast',   color: 'text-mim-red' },
-            { label: '~1 Hour',    key: 'medium', color: 'text-mim-yellow' },
-            { label: '~1 Day',     key: 'slow',   color: 'text-mim-green' },
+            { label: t('dash.nextBlock'), key: 'fast',   color: 'text-mim-red' },
+            { label: t('dash.oneHour'),   key: 'medium', color: 'text-mim-yellow' },
+            { label: t('dash.oneDay'),    key: 'slow',   color: 'text-mim-green' },
           ].map(({ label, key, color }) => {
             const satVb = fees?.[key as keyof Fees]?.satVb;
             return (
@@ -540,12 +545,12 @@ export default function DashboardPage() {
       </Card>
 
       {/* Latest Block */}
-      <Card title="Latest Block" accent="🧱">
+      <Card title={t('dash.latestBlock')} accent="🧱">
         {latestBlock ? (
           <>
             <div className="flex items-end justify-between">
               <div>
-                <Label>Height</Label>
+                <Label>{t('dash.height')}</Label>
                 <BigValue className="text-bitcoin-orange">
                   #{latestBlock.height}
                 </BigValue>
@@ -555,19 +560,19 @@ export default function DashboardPage() {
               </span>
             </div>
             <div className="space-y-0">
-              <Row label="Hash" value={formatHash(latestBlock.hash, 10)} mono />
-              <Row label="Transactions" value={formatNumber(latestBlock.nTx)} />
+              <Row label={t('dash.hash')} value={formatHash(latestBlock.hash, 10)} mono />
+              <Row label={t('dash.transactions')} value={formatNumber(latestBlock.nTx)} />
               {latestBlock.totalFees != null && (
                 <Row
-                  label="Total Fees"
-                  value={`${latestBlock.totalFees.toFixed(8)} BTC`}
+                  label={t('dash.totalFees')}
+                  value={fmt(latestBlock.totalFees)}
                   mono
                 />
               )}
             </div>
           </>
         ) : (
-          <p className="text-xs text-mim-text-muted">Waiting for block data…</p>
+          <p className="text-xs text-mim-text-muted">{t('dash.waitingBlock')}</p>
         )}
       </Card>
 

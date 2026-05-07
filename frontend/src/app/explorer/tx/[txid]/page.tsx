@@ -5,6 +5,8 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { formatHash, formatNumber, formatBytes } from '@/lib/formatters';
+import { useBtcUnit } from '@/hooks/useBtcUnit';
+import { usePreferences } from '@/hooks/usePreferences';
 
 function CopyBtn({ text }: { text: string }) {
   const [ok, setOk] = useState(false);
@@ -59,6 +61,7 @@ type TxNote = {
 
 // ── Notes Section ────────────────────────────────────────────────────────────
 function NotesSection({ txid }: { txid: string }) {
+  const { t }                   = usePreferences();
   const [notes,    setNotes]    = useState<TxNote[]>([]);
   const [draft,    setDraft]    = useState('');
   const [editing,  setEditing]  = useState<number | null>(null);
@@ -121,7 +124,7 @@ function NotesSection({ txid }: { txid: string }) {
   return (
     <div>
       <h2 className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted mb-3">
-        Notes
+        {t('tx.notes')}
       </h2>
 
       {/* Add note */}
@@ -131,7 +134,7 @@ function NotesSection({ txid }: { txid: string }) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          placeholder="Add a note to this transaction…"
+          placeholder={t('tx.addNote')}
           className="flex-1 bg-mim-surface border border-mim-border text-mim-text text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-bitcoin-orange/60 placeholder-mim-text-dim"
         />
         <button
@@ -139,7 +142,7 @@ function NotesSection({ txid }: { txid: string }) {
           disabled={saving || !draft.trim()}
           className="px-4 py-2 rounded-lg bg-bitcoin-orange text-black text-xs font-semibold hover:bg-bitcoin-orange-dark disabled:opacity-50 transition-colors"
         >
-          {saving ? '…' : 'Save'}
+          {saving ? '…' : t('tx.save')}
         </button>
       </div>
 
@@ -147,7 +150,7 @@ function NotesSection({ txid }: { txid: string }) {
 
       {/* Notes list */}
       {notes.length === 0 ? (
-        <p className="text-xs text-mim-text-dim">No notes yet.</p>
+        <p className="text-xs text-mim-text-dim">{t('tx.noNotes')}</p>
       ) : (
         <div className="space-y-2">
           {notes.map((n) => (
@@ -168,7 +171,7 @@ function NotesSection({ txid }: { txid: string }) {
                     autoFocus
                     className="flex-1 bg-mim-bg border border-mim-border text-mim-text text-sm rounded-lg px-2 py-1 focus:outline-none focus:border-bitcoin-orange/60"
                   />
-                  <button onClick={() => handleUpdate(n.id)} className="text-xs text-mim-green hover:underline">Save</button>
+                  <button onClick={() => handleUpdate(n.id)} className="text-xs text-mim-green hover:underline">{t('tx.save')}</button>
                   <button onClick={() => setEditing(null)} className="text-xs text-mim-text-dim hover:underline">Cancel</button>
                 </div>
               ) : (
@@ -178,8 +181,8 @@ function NotesSection({ txid }: { txid: string }) {
                     <p className="text-[10px] text-mim-text-dim mt-0.5">{formatDate(n.created_at)}</p>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                    <button onClick={() => startEdit(n)} className="text-[10px] text-mim-text-muted hover:text-mim-text">edit</button>
-                    <button onClick={() => handleDelete(n.id)} className="text-[10px] text-mim-red hover:text-mim-red/80">delete</button>
+                    <button onClick={() => startEdit(n)} className="text-[10px] text-mim-text-muted hover:text-mim-text">{t('tx.edit')}</button>
+                    <button onClick={() => handleDelete(n.id)} className="text-[10px] text-mim-red hover:text-mim-red/80">{t('tx.delete')}</button>
                   </div>
                 </div>
               )}
@@ -195,6 +198,8 @@ function NotesSection({ txid }: { txid: string }) {
 function TxDetailContent() {
   const { txid } = useParams<{ txid: string }>();
   const searchParams = useSearchParams();
+  const { fmt } = useBtcUnit();
+  const { t }   = usePreferences();
 
   const [tx,        setTx]        = useState<TxDetail | null>(null);
   const [loading,   setLoading]   = useState(true);
@@ -214,7 +219,7 @@ function TxDetailContent() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-48 text-mim-text-muted text-sm animate-pulse">
-        Loading transaction…
+        {t('tx.loading')}
       </div>
     );
   }
@@ -222,9 +227,9 @@ function TxDetailContent() {
   if (error || !tx) {
     return (
       <div className="space-y-4 max-w-4xl">
-        <p className="text-mim-red font-mono text-sm">{error || 'Transaction not found.'}</p>
+        <p className="text-mim-red font-mono text-sm">{error || t('tx.notFound')}</p>
         <Link href="/explorer" className="text-bitcoin-orange text-sm hover:underline">
-          ← Back to Explorer
+          {t('tx.backExplorer')}
         </Link>
       </div>
     );
@@ -267,8 +272,8 @@ function TxDetailContent() {
             }`}
           >
             {tx.confirmed
-              ? `✓ Confirmed · ${tx.confirmations} conf${tx.confirmations !== 1 ? 's' : ''}`
-              : '⏳ Unconfirmed (mempool)'}
+              ? `✓ ${t('tx.confirmed')} · ${tx.confirmations} ${tx.confirmations !== 1 ? t('tx.confs') : t('tx.conf')}`
+              : `⏳ ${t('tx.unconfirmed')}`}
           </span>
         </div>
 
@@ -281,10 +286,10 @@ function TxDetailContent() {
       {/* Info row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Size',     value: formatBytes(tx.size) },
-          { label: 'vSize',    value: `${tx.vsize} vB` },
-          { label: 'Weight',   value: `${formatNumber(tx.weight)} WU` },
-          { label: 'Fee',      value: `${(tx.fee * 1e8).toFixed(0)} sat · ${tx.feeRate} sat/vB` },
+          { label: t('tx.size'),     value: formatBytes(tx.size) },
+          { label: t('tx.vsize'),    value: `${tx.vsize} vB` },
+          { label: t('tx.weight'),   value: `${formatNumber(tx.weight)} WU` },
+          { label: t('tx.fee'),      value: `${(tx.fee * 1e8).toFixed(0)} sat · ${tx.feeRate} sat/vB` },
         ].map(({ label, value }) => (
           <div
             key={label}
@@ -301,7 +306,7 @@ function TxDetailContent() {
       {/* IO Diagram */}
       <div>
         <h2 className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted mb-3">
-          Inputs → Outputs
+          {t('tx.inputsOutputs')}
         </h2>
 
         <div className="flex flex-col sm:flex-row gap-4 items-start">
@@ -315,12 +320,12 @@ function TxDetailContent() {
               >
                 <p className="text-hash text-xs truncate">{inp.address || 'coinbase'}</p>
                 <p className="font-mono text-xs text-mim-text-muted">
-                  {inp.value > 0 ? `${inp.value.toFixed(8)} BTC` : '—'}
+                  {inp.value > 0 ? fmt(inp.value) : '—'}
                 </p>
               </div>
             ))}
             <div className="text-[10px] text-mim-text-dim text-right">
-              Total in: {totalIn.toFixed(8)} BTC
+              {t('tx.totalIn')} {fmt(totalIn)}
             </div>
           </div>
 
@@ -344,16 +349,16 @@ function TxDetailContent() {
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-hash text-xs truncate">{out.address || 'OP_RETURN'}</p>
                   {!out.spent && (
-                    <span className="text-[9px] text-mim-green flex-shrink-0">UNSPENT</span>
+                    <span className="text-[9px] text-mim-green flex-shrink-0">{t('tx.unspent')}</span>
                   )}
                 </div>
                 <p className="font-mono text-xs text-mim-text">
-                  {out.value.toFixed(8)} BTC
+                  {fmt(out.value)}
                 </p>
               </div>
             ))}
             <div className="text-[10px] text-mim-text-dim text-right">
-              Total out: {totalOut.toFixed(8)} BTC
+              {t('tx.totalOut')} {fmt(totalOut)}
             </div>
           </div>
         </div>
@@ -369,7 +374,7 @@ function TxDetailContent() {
             onClick={() => setHexOpen((o) => !o)}
             className="w-full flex items-center justify-between px-4 py-3 bg-mim-surface hover:bg-mim-surface-2 transition-colors text-xs text-mim-text-muted font-semibold uppercase tracking-widest"
           >
-            <span>Raw Hex</span>
+            <span>{t('tx.rawHex')}</span>
             <span>{hexOpen ? '▲' : '▼'}</span>
           </button>
 
@@ -387,9 +392,10 @@ function TxDetailContent() {
 }
 
 export default function TxDetailPage() {
+  const { t } = usePreferences();
   return (
     <Suspense fallback={
-      <div className="text-mim-text-muted text-sm animate-pulse">Loading transaction…</div>
+      <div className="text-mim-text-muted text-sm animate-pulse">{t('tx.loading')}</div>
     }>
       <TxDetailContent />
     </Suspense>

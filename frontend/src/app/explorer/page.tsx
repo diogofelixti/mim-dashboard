@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { formatHash, formatTimeAgo, formatBytes, formatNumber } from '@/lib/formatters';
+import { usePreferences } from '@/hooks/usePreferences';
 
 type BlockSummary = {
   height: number;
@@ -26,6 +27,7 @@ type SearchResult = {
 function ExplorerContent() {
   const router       = useRouter();
   const searchParams = useSearchParams();
+  const { t }        = usePreferences();
 
   const [query,     setQuery]     = useState(searchParams.get('q') ?? '');
   const [blocks,    setBlocks]    = useState<BlockSummary[]>([]);
@@ -60,7 +62,7 @@ function ExplorerContent() {
         router.push(`/explorer/tx/${result.txid}`);
       }
     } catch {
-      setError('Nothing found for that query.');
+      setError(t('explorer.notFound'));
       setSearching(false);
     }
   }
@@ -80,7 +82,7 @@ function ExplorerContent() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Block height, block hash or txid…"
+            placeholder={t('explorer.searchPlaceholder')}
             className="
               flex-1 px-4 py-3 rounded-xl font-mono text-sm
               bg-mim-surface border border-mim-border
@@ -97,7 +99,7 @@ function ExplorerContent() {
               hover:bg-bitcoin-orange-dark disabled:opacity-50 transition-colors
             "
           >
-            {searching ? '…' : 'Search'}
+            {searching ? '…' : t('explorer.search')}
           </button>
         </div>
         {error && (
@@ -108,22 +110,22 @@ function ExplorerContent() {
       {/* Latest blocks table */}
       <div>
         <h2 className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted mb-3">
-          Latest Blocks
+          {t('explorer.latestBlocks')}
         </h2>
 
         {loading ? (
-          <p className="text-xs text-mim-text-muted animate-pulse">Loading…</p>
+          <p className="text-xs text-mim-text-muted animate-pulse">{t('explorer.loading')}</p>
         ) : (
           <div className="bg-mim-surface border border-mim-border rounded-xl overflow-x-auto">
             <table className="w-full text-sm min-w-[600px]">
               <thead>
                 <tr className="border-b border-mim-border">
-                  {['Height', 'Hash', 'Txs', 'Size', 'Fees', 'Time'].map((h, i) => (
+                  {(['height', 'hash', 'txs', 'size', 'fees', 'time'] as const).map((key, i) => (
                     <th
-                      key={h}
+                      key={key}
                       className={`px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-mim-text-muted ${i > 1 ? 'text-right' : 'text-left'}`}
                     >
-                      {h}
+                      {t(`explorer.${key}`)}
                     </th>
                   ))}
                 </tr>
@@ -174,9 +176,10 @@ function ExplorerContent() {
 }
 
 export default function ExplorerPage() {
+  const { t } = usePreferences();
   return (
     <Suspense fallback={
-      <div className="text-mim-text-muted text-sm animate-pulse">Loading…</div>
+      <div className="text-mim-text-muted text-sm animate-pulse">{t('explorer.loading')}</div>
     }>
       <ExplorerContent />
     </Suspense>

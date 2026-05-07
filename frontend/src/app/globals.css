@@ -6,7 +6,33 @@
 @tailwind utilities;
 
 @layer base {
-  html {
+  :root {
+    --mim-bg: #F5F5F7;
+    --mim-surface: #FFFFFF;
+    --mim-surface-2: #F0F0F4;
+    --mim-border: #DCDCE4;
+    --mim-border-light: #C8C8D4;
+    --mim-text: #1A1A25;
+    --mim-text-muted: #5A5A70;
+    --mim-text-dim: #8888A0;
+    --mim-scrollbar-track: #F0F0F4;
+    --mim-scrollbar-thumb: #C8C8D4;
+    --mim-scrollbar-thumb-hover: #AAABB8;
+    color-scheme: light;
+  }
+
+  .dark {
+    --mim-bg: #0A0A0F;
+    --mim-surface: #12121A;
+    --mim-surface-2: #1A1A25;
+    --mim-border: #2A2A3A;
+    --mim-border-light: #3A3A4A;
+    --mim-text: #E4E4ED;
+    --mim-text-muted: #8888A0;
+    --mim-text-dim: #5A5A70;
+    --mim-scrollbar-track: #12121A;
+    --mim-scrollbar-thumb: #2A2A3A;
+    --mim-scrollbar-thumb-hover: #3A3A4A;
     color-scheme: dark;
   }
 
@@ -25,14 +51,14 @@
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #12121A;
+    background: var(--mim-scrollbar-track);
   }
   ::-webkit-scrollbar-thumb {
-    background: #2A2A3A;
+    background: var(--mim-scrollbar-thumb);
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #3A3A4A;
+    background: var(--mim-scrollbar-thumb-hover);
   }
 }
 

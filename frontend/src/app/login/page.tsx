@@ -3,6 +3,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { login } from '@/lib/api';
+import { translate, type Lang } from '@/lib/i18n';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -11,6 +12,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
+  const [lang, setLang]         = useState<Lang>('en');
+
+  useEffect(() => {
+    const cached = localStorage.getItem('mim-language') as Lang | null;
+    if (cached === 'en' || cached === 'pt') setLang(cached);
+  }, []);
+
+  const t = (key: string, params?: Record<string, string | number>) => translate(lang, key, params);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/setup/status`)
@@ -27,7 +36,7 @@ export default function LoginPage() {
       await login(password);
       router.replace('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
+      setError(err instanceof Error ? err.message : t('login.failed'));
     } finally {
       setLoading(false);
     }
@@ -77,10 +86,10 @@ export default function LoginPage() {
             </span>
           </div>
           <h1 className="text-2xl font-semibold text-mim-text tracking-tight">
-            MIM-Dashboard
+            {t('login.title')}
           </h1>
           <p className="text-sm text-mim-text-muted mt-1 font-mono tracking-widest uppercase">
-            Magic Internet Money
+            {t('login.subtitle')}
           </p>
         </div>
 
@@ -88,7 +97,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs text-mim-text-muted mb-2 uppercase tracking-widest">
-              Node Password
+              {t('login.password')}
             </label>
             <input
               type="password"
@@ -146,17 +155,17 @@ export default function LoginPage() {
                     d="M4 12a8 8 0 018-8v8H4z"
                   />
                 </svg>
-                Verifying…
+                {t('login.verifying')}
               </>
             ) : (
-              'Unlock Dashboard'
+              t('login.unlock')
             )}
           </button>
         </form>
 
         {/* Footer */}
         <p className="text-center text-xs text-mim-text-dim mt-10 font-mono">
-          Don&apos;t trust, verify. 🧙‍♂️
+          {t('login.footer')} 🧙‍♂️
         </p>
       </div>
     </div>

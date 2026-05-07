@@ -3,7 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { api } from '@/lib/api';
-import { formatHash, formatBTC, formatTimeAgo, formatNumber } from '@/lib/formatters';
+import { formatHash, formatTimeAgo, formatNumber } from '@/lib/formatters';
+import { useBtcUnit } from '@/hooks/useBtcUnit';
+import { usePreferences } from '@/hooks/usePreferences';
 
 type LiveBlock = {
   height: number;
@@ -29,6 +31,8 @@ type LiveTx = {
 let _uid = 0;
 
 export default function LivePage() {
+  const { fmt } = useBtcUnit();
+  const { t } = usePreferences();
   const [blocks,     setBlocks]     = useState<LiveBlock[]>([]);
   const [txs,        setTxs]        = useState<LiveTx[]>([]);
   const [paused,     setPaused]     = useState(false);
@@ -98,13 +102,13 @@ export default function LivePage() {
             }`}
           />
           <span className="text-sm font-semibold text-mim-text">
-            {connected ? 'Live' : 'Disconnected'}
+            {connected ? t('live.live') : t('live.disconnected')}
           </span>
         </div>
 
         <div className="flex gap-4 text-xs text-mim-text-muted">
-          <span>🧱 {blockCount} block{blockCount !== 1 ? 's' : ''}</span>
-          <span>📤 {txCount} tx{txCount !== 1 ? 's' : ''} this session</span>
+          <span>🧱 {blockCount} {blockCount !== 1 ? t('live.blocks_plural') : t('live.block')}</span>
+          <span>📤 {txCount} {txCount !== 1 ? t('live.txs_plural') : t('live.tx')} {t('live.thisSession')}</span>
         </div>
 
         <button
@@ -117,7 +121,7 @@ export default function LivePage() {
             }
           `}
         >
-          {paused ? '▶ Resume' : '⏸ Pause'}
+          {paused ? t('live.resume') : t('live.pause')}
         </button>
       </div>
 
@@ -127,12 +131,12 @@ export default function LivePage() {
         {/* Blocks */}
         <div className="w-72 flex-shrink-0 flex flex-col gap-2">
           <h2 className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted flex-shrink-0">
-            🧱 Blocks
+            🧱 {t('live.blocks')}
           </h2>
           <div className="flex-1 overflow-y-auto space-y-2 pr-1">
             {blocks.length === 0 ? (
               <div className="flex items-center justify-center h-32 text-xs text-mim-text-dim">
-                Waiting for blocks…
+                {t('live.waitingBlocks')}
               </div>
             ) : (
               blocks.map((b) => (
@@ -161,7 +165,7 @@ export default function LivePage() {
                   <div className="flex gap-3 text-[11px] text-mim-text-muted">
                     <span>{formatNumber(b.nTx)} txs</span>
                     <span className="text-bitcoin-orange/80">
-                      {b.totalFees.toFixed(6)} BTC
+                      {fmt(b.totalFees)}
                     </span>
                     <span>{b.avgFeeRate} sat/vB</span>
                   </div>
@@ -174,12 +178,12 @@ export default function LivePage() {
         {/* Txs */}
         <div className="flex-1 flex flex-col gap-2 min-w-0">
           <h2 className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted flex-shrink-0">
-            📤 Mempool Transactions
+            📤 {t('live.mempoolTxs')}
           </h2>
           <div ref={txListRef} className="flex-1 overflow-y-auto space-y-1.5 pr-1">
             {txs.length === 0 ? (
               <div className="flex items-center justify-center h-32 text-xs text-mim-text-dim">
-                Waiting for transactions…
+                {t('live.waitingTxs')}
               </div>
             ) : (
               txs.map((tx) => (
@@ -199,7 +203,7 @@ export default function LivePage() {
                   </span>
 
                   <span className="font-mono text-sm font-semibold text-mim-text flex-shrink-0 w-28 text-right">
-                    {formatBTC(tx.totalOutput, 4)}
+                    {fmt(tx.totalOutput)}
                   </span>
 
                   <span className="text-[11px] text-mim-text-muted flex-shrink-0 w-16 text-right">

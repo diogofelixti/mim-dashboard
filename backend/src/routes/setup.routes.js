@@ -293,10 +293,23 @@ export async function setupSetupRoutes(fastify) {
     await saveConfigToDB(configs);
 
     const hash = await bcrypt.hash(password, 12);
-    await pool.query(
+    const { rows: userRows } = await pool.query(
       `INSERT INTO users (username, password_hash) VALUES ('admin', $1)
-       ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
+       ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash
+       RETURNING id`,
       [hash]
+    );
+
+    const userId = userRows[0].id;
+    const { btcUnit = 'BTC', language = 'en' } = request.body ?? {};
+    const settingsJson = JSON.stringify({
+      btc_unit: btcUnit === 'sats' ? 'sats' : 'BTC',
+      language: language === 'pt' ? 'pt' : 'en',
+    });
+    await pool.query(
+      `INSERT INTO preferences (user_id, settings_json) VALUES ($1, $2::jsonb)
+       ON CONFLICT (user_id) DO UPDATE SET settings_json = preferences.settings_json || $2::jsonb`,
+      [userId, settingsJson]
     );
 
     zmqSubscriber.stop();

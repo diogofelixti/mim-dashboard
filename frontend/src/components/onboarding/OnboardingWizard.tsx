@@ -3,47 +3,19 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { usePreferences } from '@/hooks/usePreferences';
 
-const STEPS = [
-  {
-    icon: '₿',
-    title: 'Welcome to MIM Dashboard',
-    description:
-      'Your Bitcoin node, fully visualized. MIM gives you real-time monitoring, a block explorer, wallet management, and advanced transaction tools — all in one place.',
-    hint: 'This quick tour will show you around. Takes about 30 seconds.',
-  },
-  {
-    icon: '⚡',
-    title: 'Real-Time Monitoring',
-    description:
-      'The Dashboard shows your node\'s sync status, peer connections, mempool usage, and fee trends — all updating live. The health semaphore in the header tells you at a glance if something needs attention.',
-    hint: 'Dashboard + Live Feed',
-  },
-  {
-    icon: '🔍',
-    title: 'Block Explorer',
-    description:
-      'Browse blocks, search by height, hash, or txid. Every transaction page shows inputs, outputs, and fee details. You can also add personal notes to any transaction for your own records.',
-    hint: 'Explorer + TX Notes',
-  },
-  {
-    icon: '🔐',
-    title: 'Wallet Management',
-    description:
-      'Create, load, and manage multiple wallets. Use Coin Control to hand-pick UTXOs for spending. Lock outputs to protect them, backup wallet files, and generate addresses — all without the command line.',
-    hint: 'Wallets + Coin Control',
-  },
-  {
-    icon: '📝',
-    title: 'Transactions & PSBT',
-    description:
-      'Send BTC directly or use the PSBT Wizard for hardware wallets and multisig setups. The wizard walks you through create, sign, combine, finalize, and broadcast — step by step.',
-    hint: 'Transactions + PSBT Wizard',
-  },
+const STEP_KEYS = [
+  { icon: '₿',  titleKey: 'onboarding.welcome.title', descKey: 'onboarding.welcome.desc', hintKey: 'onboarding.welcome.hint' },
+  { icon: '⚡', titleKey: 'onboarding.monitor.title', descKey: 'onboarding.monitor.desc', hintKey: 'onboarding.monitor.hint' },
+  { icon: '🔍', titleKey: 'onboarding.explore.title', descKey: 'onboarding.explore.desc', hintKey: 'onboarding.explore.hint' },
+  { icon: '🔐', titleKey: 'onboarding.manage.title',  descKey: 'onboarding.manage.desc',  hintKey: 'onboarding.manage.hint' },
+  { icon: '📝', titleKey: 'onboarding.tx.title',      descKey: 'onboarding.tx.desc',      hintKey: 'onboarding.tx.hint' },
 ];
 
 export default function OnboardingWizard() {
   const router = useRouter();
+  const { t } = usePreferences();
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState(0);
   const [closing, setClosing] = useState(false);
@@ -68,8 +40,8 @@ export default function OnboardingWizard() {
 
   if (!visible) return null;
 
-  const current = STEPS[step];
-  const isLast = step === STEPS.length - 1;
+  const current = STEP_KEYS[step];
+  const isLast = step === STEP_KEYS.length - 1;
 
   return (
     <div
@@ -84,7 +56,7 @@ export default function OnboardingWizard() {
       >
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-1.5 pt-6 pb-2">
-          {STEPS.map((_, i) => (
+          {STEP_KEYS.map((_, i) => (
             <div
               key={i}
               className={`h-1 rounded-full transition-all duration-300 ${
@@ -103,15 +75,15 @@ export default function OnboardingWizard() {
           <div className="text-4xl">{current.icon}</div>
 
           <h2 className="text-lg font-bold text-mim-text">
-            {current.title}
+            {t(current.titleKey)}
           </h2>
 
           <p className="text-sm text-mim-text-muted leading-relaxed">
-            {current.description}
+            {t(current.descKey)}
           </p>
 
           <p className="text-[10px] font-semibold uppercase tracking-widest text-bitcoin-orange/70">
-            {current.hint}
+            {t(current.hintKey)}
           </p>
         </div>
 
@@ -122,14 +94,14 @@ export default function OnboardingWizard() {
               onClick={skip}
               className="text-xs text-mim-text-dim hover:text-mim-text transition-colors"
             >
-              Skip tour
+              {t('onboarding.skip')}
             </button>
           ) : (
             <button
               onClick={() => setStep((s) => s - 1)}
               className="text-xs text-mim-text-muted hover:text-mim-text transition-colors"
             >
-              ← Back
+              {t('onboarding.back')}
             </button>
           )}
 
@@ -138,14 +110,14 @@ export default function OnboardingWizard() {
               onClick={() => { finish(); router.push('/dashboard'); }}
               className="px-5 py-2.5 rounded-lg bg-bitcoin-orange text-black text-sm font-semibold hover:bg-bitcoin-orange-dark transition-colors"
             >
-              Get Started
+              {t('onboarding.start')}
             </button>
           ) : (
             <button
               onClick={() => setStep((s) => s + 1)}
               className="px-5 py-2.5 rounded-lg bg-bitcoin-orange text-black text-sm font-semibold hover:bg-bitcoin-orange-dark transition-colors"
             >
-              Next →
+              {t('onboarding.next')}
             </button>
           )}
         </div>

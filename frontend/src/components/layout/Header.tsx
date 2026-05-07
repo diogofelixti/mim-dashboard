@@ -5,20 +5,25 @@ import { usePathname, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { formatPrice, formatNumber, formatBytes } from '@/lib/formatters';
+import { usePreferences } from '@/hooks/usePreferences';
 
-const PAGE_TITLES: Record<string, string> = {
-  '/dashboard':    'Dashboard',
-  '/live':         'Live Feed',
-  '/explorer':     'Explorer',
-  '/wallets':      'Wallets',
-  '/transactions': 'Transactions',
-  '/alerts':       'Alerts',
-  '/settings':     'Settings',
+const PAGE_TITLE_KEYS: Record<string, string> = {
+  '/dashboard':    'nav.dashboard',
+  '/live':         'nav.live',
+  '/explorer':     'nav.explorer',
+  '/wallets':      'nav.wallets',
+  '/transactions': 'nav.transactions',
+  '/alerts':       'nav.alerts',
+  '/settings':     'nav.settings',
 };
 
 type PriceData = {
   usd: number;
+  brl: number;
+  eur: number;
   usd_24h: number;
+  brl_24h: number;
+  eur_24h: number;
 };
 
 type HealthCheck = {
@@ -55,7 +60,7 @@ const STATUS_ICON: Record<string, string> = {
   red:    '✕',
 };
 
-function HealthPopover({ health }: { health: NodeHealth }) {
+function HealthPopover({ health, t }: { health: NodeHealth; t: (key: string, params?: Record<string, string | number>) => string }) {
   const { checks } = health;
 
   return (
@@ -63,9 +68,9 @@ function HealthPopover({ health }: { health: NodeHealth }) {
       {/* Overall */}
       <div className="flex items-center gap-2 pb-2 border-b border-mim-border">
         <span className={`w-2.5 h-2.5 rounded-full ${STATUS_DOT[health.status]}`} />
-        <span className="text-xs font-semibold text-mim-text">Node Health</span>
+        <span className="text-xs font-semibold text-mim-text">{t('header.nodeHealth')}</span>
         <span className={`ml-auto text-[10px] font-semibold uppercase ${STATUS_TEXT[health.status]}`}>
-          {health.status === 'green' ? 'Healthy' : health.status === 'yellow' ? 'Warning' : 'Critical'}
+          {health.status === 'green' ? t('header.healthy') : health.status === 'yellow' ? t('header.warning') : t('header.critical')}
         </span>
       </div>
 
@@ -75,7 +80,7 @@ function HealthPopover({ health }: { health: NodeHealth }) {
           <span className={`text-[10px] font-bold ${STATUS_TEXT[checks.sync.status]}`}>
             {STATUS_ICON[checks.sync.status]}
           </span>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">Sync</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">{t('header.sync')}</span>
           <span className={`ml-auto text-[10px] font-semibold ${STATUS_TEXT[checks.sync.status]}`}>
             {checks.sync.progress.toFixed(2)}%
           </span>
@@ -87,8 +92,8 @@ function HealthPopover({ health }: { health: NodeHealth }) {
           />
         </div>
         <div className="flex justify-between text-[10px] text-mim-text-dim">
-          <span>Block {checks.sync.blocks}</span>
-          <span>Header {checks.sync.headers}</span>
+          <span>{t('header.block')} {checks.sync.blocks}</span>
+          <span>{t('header.headerLabel')} {checks.sync.headers}</span>
         </div>
       </div>
 
@@ -98,14 +103,14 @@ function HealthPopover({ health }: { health: NodeHealth }) {
           <span className={`text-[10px] font-bold ${STATUS_TEXT[checks.peers.status]}`}>
             {STATUS_ICON[checks.peers.status]}
           </span>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">Peers</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">{t('header.peers')}</span>
           <span className={`ml-auto text-[10px] font-semibold ${STATUS_TEXT[checks.peers.status]}`}>
             {checks.peers.total}
           </span>
         </div>
         <div className="flex gap-3 text-[10px] text-mim-text-dim">
-          <span>↓ {checks.peers.inbound} inbound</span>
-          <span>↑ {checks.peers.outbound} outbound</span>
+          <span>↓ {checks.peers.inbound} {t('header.inbound')}</span>
+          <span>↑ {checks.peers.outbound} {t('header.outbound')}</span>
         </div>
       </div>
 
@@ -115,7 +120,7 @@ function HealthPopover({ health }: { health: NodeHealth }) {
           <span className={`text-[10px] font-bold ${STATUS_TEXT[checks.mempool.status]}`}>
             {STATUS_ICON[checks.mempool.status]}
           </span>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">Mempool</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">{t('header.mempool')}</span>
           <span className={`ml-auto text-[10px] font-semibold ${STATUS_TEXT[checks.mempool.status]}`}>
             {checks.mempool.usagePct}%
           </span>
@@ -144,6 +149,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const pathname      = usePathname();
   const router        = useRouter();
   const { connected } = useWebSocket();
+  const { currency, t }  = usePreferences();
 
   const [query,       setQuery]       = useState('');
   const [price,       setPrice]       = useState<PriceData | null>(null);
@@ -152,7 +158,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const [mobileSearch, setMobileSearch] = useState(false);
   const popRef = useRef<HTMLDivElement>(null);
 
-  const title = PAGE_TITLES[pathname] ?? 'MIM-Dashboard';
+  const titleKey = PAGE_TITLE_KEYS[pathname];
+  const title = titleKey ? t(titleKey) : 'MIM-Dashboard';
 
   useEffect(() => {
     async function fetchPrice() {
@@ -174,11 +181,11 @@ export default function Header({ onMenuClick }: HeaderProps) {
       } catch {
         setHealth({
           status: 'red',
-          summary: 'Cannot reach backend',
+          summary: t('header.cannotReach'),
           checks: {
-            sync:    { status: 'red', progress: 0, blocks: 0, headers: 0, headerGap: 0, label: 'Unreachable' },
-            peers:   { status: 'red', total: 0, inbound: 0, outbound: 0, label: 'Unreachable' },
-            mempool: { status: 'red', txCount: 0, bytes: 0, usagePct: 0, label: 'Unreachable' },
+            sync:    { status: 'red', progress: 0, blocks: 0, headers: 0, headerGap: 0, label: t('header.unreachable') },
+            peers:   { status: 'red', total: 0, inbound: 0, outbound: 0, label: t('header.unreachable') },
+            mempool: { status: 'red', txCount: 0, bytes: 0, usagePct: 0, label: t('header.unreachable') },
           },
         });
       }
@@ -211,7 +218,9 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const dotColor = STATUS_DOT[status];
   const isHealthy = status === 'green';
 
-  const change24h = price?.usd_24h ?? 0;
+  const priceValue = price ? price[currency] : 0;
+  const change24hKey = `${currency}_24h` as keyof PriceData;
+  const change24h = price ? (price[change24hKey] as number) : 0;
 
   return (
     <header className="fixed top-0 left-0 lg:left-56 right-0 h-14 flex items-center gap-2 sm:gap-4 px-3 sm:px-5 bg-mim-surface/95 border-b border-mim-border backdrop-blur z-30">
@@ -240,7 +249,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search block, txid, address…"
+            placeholder={t('header.search')}
             className="
               w-full pl-8 pr-4 py-1.5 rounded-lg text-sm font-mono
               bg-mim-bg border border-mim-border
@@ -269,7 +278,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
           <div className="flex items-center gap-1.5 sm:gap-2 text-sm">
             <span className="text-mim-text-muted text-xs hidden sm:inline">BTC</span>
             <span className="font-mono font-semibold text-mim-text text-xs sm:text-sm">
-              {formatPrice(price.usd, 'usd')}
+              {formatPrice(priceValue, currency)}
             </span>
             <span
               className={`text-xs font-mono font-medium hidden md:inline ${
@@ -294,10 +303,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
               className={`w-2.5 h-2.5 rounded-full ${dotColor} ${isHealthy ? 'animate-pulse-live' : ''}`}
             />
             <span className={`text-xs font-semibold hidden sm:inline ${STATUS_TEXT[status]}`}>
-              {status === 'green' ? 'Healthy' : status === 'yellow' ? 'Warning' : 'Critical'}
+              {status === 'green' ? t('header.healthy') : status === 'yellow' ? t('header.warning') : t('header.critical')}
             </span>
           </button>
-          {showPop && health && <HealthPopover health={health} />}
+          {showPop && health && <HealthPopover health={health} t={t} />}
         </div>
 
         {/* WebSocket */}
@@ -319,7 +328,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search block, txid, address…"
+              placeholder={t('header.search')}
               autoFocus
               className="w-full px-3 py-2 rounded-lg text-sm font-mono bg-mim-bg border border-mim-border text-mim-text placeholder-mim-text-dim focus:outline-none focus:border-bitcoin-orange/50"
             />

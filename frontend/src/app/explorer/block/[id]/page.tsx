@@ -12,6 +12,7 @@ import {
   formatNumber,
   formatDifficulty,
 } from '@/lib/formatters';
+import { usePreferences } from '@/hooks/usePreferences';
 
 function CopyBtn({ text }: { text: string }) {
   const [ok, setOk] = useState(false);
@@ -64,6 +65,7 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 export default function BlockDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { t }  = usePreferences();
 
   const [block,   setBlock]   = useState<BlockDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -91,7 +93,7 @@ export default function BlockDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-48 text-mim-text-muted text-sm animate-pulse">
-        Loading block…
+        {t('block.loading')}
       </div>
     );
   }
@@ -99,9 +101,9 @@ export default function BlockDetailPage() {
   if (error || !block) {
     return (
       <div className="space-y-4 max-w-4xl">
-        <p className="text-mim-red font-mono text-sm">{error || 'Block not found.'}</p>
+        <p className="text-mim-red font-mono text-sm">{error || t('block.notFound')}</p>
         <Link href="/explorer" className="text-bitcoin-orange text-sm hover:underline">
-          ← Back to Explorer
+          {t('block.backExplorer')}
         </Link>
       </div>
     );
@@ -138,12 +140,12 @@ export default function BlockDetailPage() {
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <StatCard label="Transactions"  value={formatNumber(block.nTx)} />
-        <StatCard label="Size"          value={formatBytes(block.size)} />
-        <StatCard label="Weight"        value={`${formatNumber(block.weight)} WU`} />
-        <StatCard label="Difficulty"    value={formatDifficulty(block.difficulty)} />
-        <StatCard label="Total Fees"    value={`${block.totalFees.toFixed(6)} BTC`} />
-        <StatCard label="Avg Fee Rate"  value={`${block.avgFeeRate} sat/vB`} />
+        <StatCard label={t('block.transactions')}  value={formatNumber(block.nTx)} />
+        <StatCard label={t('explorer.size')}       value={formatBytes(block.size)} />
+        <StatCard label={t('block.weight')}        value={`${formatNumber(block.weight)} WU`} />
+        <StatCard label={t('block.difficulty')}    value={formatDifficulty(block.difficulty)} />
+        <StatCard label={t('block.totalFees')}     value={`${block.totalFees.toFixed(6)} BTC`} />
+        <StatCard label={t('block.avgFeeRate')}    value={`${block.avgFeeRate} sat/vB`} />
       </div>
 
       {/* Navigation */}
@@ -166,7 +168,7 @@ export default function BlockDetailPage() {
           </button>
         ) : (
           <span className="px-3 py-2 text-xs text-mim-text-dim">
-            (latest block)
+            {t('block.latestBlock')}
           </span>
         )}
       </div>
@@ -174,21 +176,21 @@ export default function BlockDetailPage() {
       {/* Transactions */}
       <div>
         <h2 className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted mb-3">
-          Transactions ({formatNumber(block.nTx)})
+          {t('block.transactions')} ({formatNumber(block.nTx)})
         </h2>
 
         <div className="bg-mim-surface border border-mim-border rounded-xl overflow-x-auto">
           <table className="w-full text-sm min-w-[600px]">
             <thead>
               <tr className="border-b border-mim-border">
-                {['Txid', 'Inputs', 'Outputs', 'Output BTC', 'vSize', 'Fee'].map((h, i) => (
+                {(['txid', 'inputs', 'outputs', 'outputBtc', 'vsize', 'fee'] as const).map((key, i) => (
                   <th
-                    key={h}
+                    key={key}
                     className={`px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-mim-text-muted ${
                       i === 0 ? 'text-left' : 'text-right'
                     }`}
                   >
-                    {h}
+                    {t(`block.${key}`)}
                   </th>
                 ))}
               </tr>

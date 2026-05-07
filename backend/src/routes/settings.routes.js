@@ -31,38 +31,44 @@ export async function setupSettingsRoutes(fastify) {
   fastify.get('/api/settings/preferences', protect, async (request, reply) => {
     try {
       const { rows } = await pool.query(
-        `SELECT theme, default_currency AS currency FROM preferences WHERE user_id = $1 LIMIT 1`,
+        `SELECT theme, default_currency AS currency, settings_json FROM preferences WHERE user_id = $1 LIMIT 1`,
         [request.user.id]
       );
-      if (rows.length === 0) return { theme: 'dark', currency: 'usd' };
-      return { theme: rows[0].theme, currency: (rows[0].currency ?? 'usd').toLowerCase() };
+      if (rows.length === 0) return { theme: 'dark', currency: 'usd', btcUnit: 'BTC', language: 'en' };
+      const sj = rows[0].settings_json ?? {};
+      return {
+        theme: rows[0].theme,
+        currency: (rows[0].currency ?? 'usd').toLowerCase(),
+        btcUnit: sj.btc_unit ?? 'BTC',
+        language: sj.language ?? 'en',
+      };
     } catch (err) {
       return reply.code(500).send({ error: err.message });
     }
   });
 
   fastify.put('/api/settings/preferences', protect, async (request, reply) => {
-    const { theme = 'dark', currency = 'usd' } = request.body ?? {};
+    const { theme = 'dark', currency = 'usd', btcUnit, language } = request.body ?? {};
+    const sjParts = {};
+    if (btcUnit) sjParts.btc_unit = btcUnit === 'sats' ? 'sats' : 'BTC';
+    if (language) sjParts.language = language === 'pt' ? 'pt' : 'en';
+    const hasSj = Object.keys(sjParts).length > 0;
     try {
-      await pool.query(
-        `INSERT INTO preferences (user_id, theme, default_currency)
-              VALUES ($1, $2, $3)
-         ON CONFLICT (user_id) DO UPDATE
-            SET theme = EXCLUDED.theme, default_currency = EXCLUDED.default_currency`,
-        [request.user.id, theme, currency.toUpperCase()]
+      const { rows } = await pool.query(
+        `SELECT id FROM preferences WHERE user_id = $1 LIMIT 1`,
+        [request.user.id]
       );
-      return { success: true };
-    } catch (err) {
-      // preferences table may not have a unique constraint on user_id — try upsert differently
-      try {
-        const { rows } = await pool.query(
-          `SELECT id FROM preferences WHERE user_id = $1 LIMIT 1`,
-          [request.user.id]
+      if (rows.length === 0) {
+        const sj = hasSj ? JSON.stringify(sjParts) : '{}';
+        await pool.query(
+          `INSERT INTO preferences (user_id, theme, default_currency, settings_json) VALUES ($1, $2, $3, $4::jsonb)`,
+          [request.user.id, theme, currency.toUpperCase(), sj]
         );
-        if (rows.length === 0) {
+      } else {
+        if (hasSj) {
           await pool.query(
-            `INSERT INTO preferences (user_id, theme, default_currency) VALUES ($1, $2, $3)`,
-            [request.user.id, theme, currency.toUpperCase()]
+            `UPDATE preferences SET theme = $1, default_currency = $2, settings_json = settings_json || $3::jsonb WHERE user_id = $4`,
+            [theme, currency.toUpperCase(), JSON.stringify(sjParts), request.user.id]
           );
         } else {
           await pool.query(
@@ -70,10 +76,10 @@ export async function setupSettingsRoutes(fastify) {
             [theme, currency.toUpperCase(), request.user.id]
           );
         }
-        return { success: true };
-      } catch (e2) {
-        return reply.code(500).send({ error: e2.message });
       }
+      return { success: true };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
     }
   });
 
