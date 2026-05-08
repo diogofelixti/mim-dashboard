@@ -262,7 +262,66 @@ export async function setupBlockRoutes(fastify) {
         } catch (_) { /* não é um txid */ }
       }
 
+      // Tenta como endereço Bitcoin (sem scan — a página de endereço faz o scan)
+      try {
+        const info = await rpcCall('validateaddress', [query]);
+        if (info.isvalid) {
+          return { type: 'address', address: query };
+        }
+      } catch (_) { /* não é um endereço válido */ }
+
       return reply.code(404).send({ error: 'Not found' });
+    }
+  );
+
+  // GET /api/address/:addr — address info via scantxoutset
+  fastify.get(
+    '/api/address/:addr',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { addr } = request.params;
+      try {
+        const info = await rpcCall('validateaddress', [addr]);
+        if (!info.isvalid) return reply.code(400).send({ error: 'Invalid address' });
+
+        let utxos = [];
+        let total_amount = 0;
+        // Retry scantxoutset if a previous scan is still in progress
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            if (attempt > 0) await new Promise((r) => setTimeout(r, 1500));
+            const scan = await rpcCall('scantxoutset', ['start', [`addr(${addr})`]]);
+            total_amount = scan.total_amount ?? 0;
+            utxos = (scan.unspents ?? []).map((u) => ({
+              txid: u.txid,
+              vout: u.vout,
+              amount: u.amount,
+              height: u.height,
+            }));
+            break;
+          } catch (err) {
+            if (attempt < 2 && err.message?.includes('already in progress')) {
+              try { await rpcCall('scantxoutset', ['abort']); } catch (_) {}
+              continue;
+            }
+            console.warn('[address] scantxoutset failed:', err.message);
+            break;
+          }
+        }
+
+        return {
+          address: addr,
+          scriptPubKey: info.scriptPubKey,
+          isscript: info.isscript,
+          iswitness: info.iswitness,
+          witness_version: info.witness_version,
+          total_amount,
+          utxo_count: utxos.length,
+          utxos,
+        };
+      } catch (err) {
+        return reply.code(502).send({ error: err.message });
+      }
     }
   );
 

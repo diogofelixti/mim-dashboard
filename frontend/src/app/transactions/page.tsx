@@ -64,12 +64,15 @@ function Textarea({ className = '', ...props }: React.TextareaHTMLAttributes<HTM
 function SendTab() {
   const { fmt } = useBtcUnit();
   const { t } = usePreferences();
+  const { unit } = useBtcUnit();
   const [form,           setForm]           = useState<SendForm>({ to: '', amount: '', feeMode: 'auto', feeRate: '', wallet: '' });
   const [sending,        setSending]        = useState(false);
   const [result,         setResult]         = useState('');
   const [error,          setError]          = useState('');
   const [selectedUtxos,  setSelectedUtxos]  = useState<SelectedUtxo[]>([]);
   const [coinWallet,     setCoinWallet]     = useState('');
+  const [amountUnit,     setAmountUnit]     = useState<'BTC' | 'sats'>(unit);
+  const [sendAll,        setSendAll]        = useState(false);
 
   useEffect(() => {
     try {
@@ -100,22 +103,30 @@ function SendTab() {
     localStorage.removeItem('mim-coin-control-wallet');
   }
 
+  function getAmountBtc(): number {
+    const raw = parseFloat(form.amount);
+    if (isNaN(raw)) return 0;
+    return amountUnit === 'sats' ? raw / 1e8 : raw;
+  }
+
   async function handleSend() {
     if (!form.to.trim() || !form.amount.trim()) return;
     setSending(true);
     setResult('');
     setError('');
     try {
+      const amountBtc = getAmountBtc();
       const wallet = coinWallet || form.wallet;
       if (selectedUtxos.length > 0 && wallet) {
         const payload: Record<string, unknown> = {
           address: form.to.trim(),
-          amount: parseFloat(form.amount),
+          amount: amountBtc,
           inputs: selectedUtxos.map((u) => ({ txid: u.txid, vout: u.vout })),
         };
         if (form.feeMode === 'manual' && form.feeRate) {
           payload.fee_rate = parseFloat(form.feeRate);
         }
+        if (sendAll) payload.subtract_fee = true;
 
         const d = await api<{ txid: string }>(
           `/api/wallets/${encodeURIComponent(wallet)}/send`,
@@ -126,7 +137,7 @@ function SendTab() {
       } else {
         const payload: Record<string, unknown> = {
           to: form.to.trim(),
-          amount: parseFloat(form.amount),
+          amount: amountBtc,
         };
         if (form.feeMode === 'manual' && form.feeRate) payload.feeRate = parseFloat(form.feeRate);
         if (form.wallet) payload.wallet = form.wallet;
@@ -206,16 +217,54 @@ function SendTab() {
       </div>
 
       <div>
-        <Label>{t('txPage.amountBtc')}</Label>
+        <div className="flex items-center justify-between mb-1">
+          <Label>{amountUnit === 'sats' ? `${t('txPage.amountBtc').replace('BTC', 'sats')}` : t('txPage.amountBtc')}</Label>
+          <div className="flex gap-1">
+            {selectedUtxos.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const val = amountUnit === 'sats' ? utxoTotalSats.toString() : utxoTotal.toFixed(8);
+                  set('amount', val);
+                  setSendAll(true);
+                }}
+                className="px-2 py-0.5 rounded text-[10px] font-semibold bg-bitcoin-orange/10 text-bitcoin-orange hover:bg-bitcoin-orange/20 transition-colors"
+              >
+                {t('txPage.max')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                const raw = parseFloat(form.amount);
+                if (!isNaN(raw) && raw > 0) {
+                  if (amountUnit === 'BTC') {
+                    set('amount', Math.round(raw * 1e8).toString());
+                  } else {
+                    set('amount', (raw / 1e8).toFixed(8));
+                  }
+                }
+                setAmountUnit((u) => u === 'BTC' ? 'sats' : 'BTC');
+                setSendAll(false);
+              }}
+              className="px-2 py-0.5 rounded text-[10px] font-semibold border border-mim-border text-mim-text-muted hover:border-mim-border-light transition-colors"
+            >
+              {amountUnit === 'BTC' ? '→ sats' : '→ BTC'}
+            </button>
+          </div>
+        </div>
         <Input
           type="number"
-          step="0.00000001"
+          step={amountUnit === 'sats' ? '1' : '0.00000001'}
           min="0"
-          placeholder="0.001"
+          placeholder={amountUnit === 'sats' ? '100000' : '0.001'}
           value={form.amount}
-          onChange={(e) => set('amount', e.target.value)}
+          onChange={(e) => { set('amount', e.target.value); setSendAll(false); }}
         />
-        {selectedUtxos.length > 0 && form.amount && parseFloat(form.amount) > utxoTotal && (
+        {sendAll && (
+          <p className="text-bitcoin-orange text-[10px] mt-1">{t('txPage.sendingAll')}</p>
+        )}
+        {selectedUtxos.length > 0 && form.amount && getAmountBtc() > utxoTotal && !sendAll && (
           <p className="text-mim-red text-[10px] mt-1">
             {t('txPage.exceedsTotal', { total: fmt(utxoTotal) })}
           </p>
@@ -274,7 +323,7 @@ function SendTab() {
           sending ||
           !form.to.trim() ||
           !form.amount.trim() ||
-          (selectedUtxos.length > 0 && parseFloat(form.amount || '0') > utxoTotal)
+          (selectedUtxos.length > 0 && !sendAll && getAmountBtc() > utxoTotal)
         }
         className="w-full py-3 rounded-xl bg-bitcoin-orange text-black font-semibold text-sm hover:bg-bitcoin-orange-dark disabled:opacity-50 transition-colors"
       >

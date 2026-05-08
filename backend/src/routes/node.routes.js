@@ -107,7 +107,9 @@ export async function setupNodeRoutes(fastify) {
         ]);
 
         const toSatVb = (r) =>
-          r.feerate ? Math.round(r.feerate * 1e5) : null;
+          r.feerate != null && r.feerate > 0
+            ? parseFloat((r.feerate * 1e5).toFixed(2))
+            : null;
 
         return {
           fast:   { satVb: toSatVb(fast),   blocks: 1,   feerate: fast.feerate },

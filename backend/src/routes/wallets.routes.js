@@ -258,7 +258,7 @@ export async function setupWalletRoutes(fastify) {
 
   fastify.post('/api/wallets/:name/send', protect, async (request, reply) => {
     const { name } = request.params;
-    const { address, amount, comment = '', inputs, fee_rate, replaceable } = request.body ?? {};
+    const { address, amount, comment = '', inputs, fee_rate, replaceable, subtract_fee } = request.body ?? {};
     if (!address || amount == null) {
       return reply.code(400).send({ error: 'address and amount required' });
     }
@@ -268,7 +268,25 @@ export async function setupWalletRoutes(fastify) {
         const opts = {};
         if (fee_rate != null) opts.fee_rate = parseFloat(fee_rate);
         if (replaceable != null) opts.replaceable = replaceable;
-        const funded = await walletCreateFundedPsbt(name, inputs, outputs, opts);
+        if (subtract_fee) opts.subtractFeeFromOutputs = [0];
+
+        let funded;
+        try {
+          funded = await walletCreateFundedPsbt(name, inputs, outputs, opts);
+        } catch (err) {
+          if (err.message?.includes('addresses available')) {
+            for (const ct of ['p2sh-segwit', 'legacy', 'bech32m']) {
+              try {
+                funded = await walletCreateFundedPsbt(name, inputs, outputs, { ...opts, change_type: ct });
+                break;
+              } catch { continue; }
+            }
+            if (!funded) throw err;
+          } else {
+            throw err;
+          }
+        }
+
         const signed = await walletProcessPsbt(name, funded.psbt, true);
         if (!signed.complete) {
           return reply.code(400).send({ error: 'Could not fully sign transaction. Missing keys?' });

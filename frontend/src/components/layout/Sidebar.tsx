@@ -36,15 +36,11 @@ export default function Sidebar({ open, onClose }: Props) {
       {/* Logo */}
       <div className="flex items-center justify-between px-5 py-5 border-b border-mim-border">
         <div className="flex items-center gap-3">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-            style={{
-              background: 'rgba(247,147,26,0.12)',
-              border: '1px solid rgba(247,147,26,0.35)',
-            }}
-          >
-            <span className="text-bitcoin-orange font-bold text-base leading-none">₿</span>
-          </div>
+          <img
+            src="/logo.png"
+            alt="MIM"
+            className="w-8 h-8 rounded-lg flex-shrink-0"
+          />
           <div className="leading-tight">
             <span className="font-semibold text-sm text-mim-text tracking-tight">MIM</span>
             <span className="block text-[10px] text-mim-text-dim font-mono uppercase tracking-widest">

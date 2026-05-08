@@ -18,10 +18,12 @@ type BlockSummary = {
 };
 
 type SearchResult = {
-  type: 'block' | 'tx';
+  type: 'block' | 'tx' | 'address';
   hash?: string;
   txid?: string;
   height?: number;
+  address?: string;
+  balance?: { total_amount: number; utxos: number } | null;
 };
 
 function ExplorerContent() {
@@ -58,6 +60,8 @@ function ExplorerContent() {
       const result = await api<SearchResult>(`/api/search/${encodeURIComponent(trimmed)}`);
       if (result.type === 'block') {
         router.push(`/explorer/block/${result.hash ?? result.height}`);
+      } else if (result.type === 'address') {
+        router.push(`/explorer/address/${result.address}`);
       } else {
         router.push(`/explorer/tx/${result.txid}`);
       }

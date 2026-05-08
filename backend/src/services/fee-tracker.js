@@ -19,9 +19,9 @@ export async function recordFees() {
             VALUES ($1, $2, $3, $4, $5)`,
       [
         height,
-        (fast.feerate   ?? 0) * 1e5,
-        (medium.feerate ?? 0) * 1e5,
-        (slow.feerate   ?? 0) * 1e5,
+        fast.feerate   > 0 ? parseFloat((fast.feerate * 1e5).toFixed(2))   : 0,
+        medium.feerate > 0 ? parseFloat((medium.feerate * 1e5).toFixed(2)) : 0,
+        slow.feerate   > 0 ? parseFloat((slow.feerate * 1e5).toFixed(2))   : 0,
         mempool.size ?? 0,
       ]
     );

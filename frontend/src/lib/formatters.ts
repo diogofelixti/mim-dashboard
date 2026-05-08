@@ -74,7 +74,9 @@ export function formatDifficulty(difficulty: number): string {
   if (difficulty >= 1e12) return `${(difficulty / 1e12).toFixed(2)} T`;
   if (difficulty >= 1e9)  return `${(difficulty / 1e9).toFixed(2)} G`;
   if (difficulty >= 1e6)  return `${(difficulty / 1e6).toFixed(2)} M`;
-  return formatNumber(difficulty);
+  if (difficulty >= 1)    return formatNumber(difficulty);
+  if (difficulty > 0)     return difficulty.toPrecision(4);
+  return '0';
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = {

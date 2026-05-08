@@ -74,17 +74,11 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="flex flex-col items-center mb-10">
-          <div
-            className="w-20 h-20 rounded-2xl flex items-center justify-center mb-5 glow-orange"
-            style={{
-              background: 'linear-gradient(135deg, #1A1A25 0%, #12121A 100%)',
-              border: '1px solid rgba(247,147,26,0.4)',
-            }}
-          >
-            <span className="text-4xl font-bold text-bitcoin-orange select-none">
-              ₿
-            </span>
-          </div>
+          <img
+            src="/logo.png"
+            alt="MIM"
+            className="w-20 h-20 rounded-2xl mb-5 glow-orange"
+          />
           <h1 className="text-2xl font-semibold text-mim-text tracking-tight">
             {t('login.title')}
           </h1>

@@ -176,7 +176,7 @@ const dict: Record<Lang, Record<string, string>> = {
     'live.waitingTxs': 'Waiting for transactions…',
 
     // ── Explorer ───────────────────────────────────────────────────
-    'explorer.searchPlaceholder': 'Block height, block hash or txid…',
+    'explorer.searchPlaceholder': 'Block height, hash, txid or address…',
     'explorer.search': 'Search',
     'explorer.notFound': 'Nothing found for that query.',
     'explorer.latestBlocks': 'Latest Blocks',
@@ -228,6 +228,19 @@ const dict: Record<Lang, Record<string, string>> = {
     'tx.delete': 'delete',
     'tx.noNotes': 'No notes yet.',
     'tx.rawHex': 'Raw Hex',
+
+    // ── Address ───────────────────────────────────────────────────
+    'addr.title': 'Address',
+    'addr.backExplorer': '← Back to Explorer',
+    'addr.balance': 'Balance (unspent)',
+    'addr.utxoCount': 'UTXOs',
+    'addr.type': 'Type',
+    'addr.utxos': 'Unspent Outputs',
+    'addr.noUtxos': 'No unspent outputs found.',
+    'addr.txid': 'Txid',
+    'addr.amount': 'Amount',
+    'addr.height': 'Height',
+    'addr.scanNote': 'Data from scantxoutset — shows only unspent outputs, not full history.',
 
     // ── Wallets ────────────────────────────────────────────────────
     'wallets.activeWallets': 'Active Wallets',
@@ -287,6 +300,8 @@ const dict: Record<Lang, Record<string, string>> = {
     'wallets.disablePrivateKeys': 'Disable private keys (watch-only)',
     'wallets.cancel': 'Cancel',
     'wallets.creating': 'Creating…',
+    'wallets.betaWarning': 'Wallet functionality is in beta. Use caution with real funds.',
+    'wallets.generatedAddress': 'New address generated',
 
     // ── Transactions ───────────────────────────────────────────────
     'txPage.send': 'Send',
@@ -321,6 +336,8 @@ const dict: Record<Lang, Record<string, string>> = {
     'txPage.decoded': 'Decoded',
     'txPage.inputs': 'Inputs',
     'txPage.outputs': 'Outputs',
+    'txPage.max': 'Max',
+    'txPage.sendingAll': 'Fee will be deducted from the amount',
 
     // ── PSBT ───────────────────────────────────────────────────────
     'psbt.title': 'PSBT Workflow',
@@ -673,7 +690,7 @@ const dict: Record<Lang, Record<string, string>> = {
     'live.waitingTxs': 'Aguardando transações…',
 
     // ── Explorer ───────────────────────────────────────────────────
-    'explorer.searchPlaceholder': 'Altura do bloco, hash do bloco ou txid…',
+    'explorer.searchPlaceholder': 'Altura, hash, txid ou endereço…',
     'explorer.search': 'Buscar',
     'explorer.notFound': 'Nada encontrado para essa busca.',
     'explorer.latestBlocks': 'Últimos Blocos',
@@ -725,6 +742,19 @@ const dict: Record<Lang, Record<string, string>> = {
     'tx.delete': 'excluir',
     'tx.noNotes': 'Nenhuma nota ainda.',
     'tx.rawHex': 'Hex Bruto',
+
+    // ── Address ───────────────────────────────────────────────────
+    'addr.title': 'Endereço',
+    'addr.backExplorer': '← Voltar ao Explorer',
+    'addr.balance': 'Saldo (não gasto)',
+    'addr.utxoCount': 'UTXOs',
+    'addr.type': 'Tipo',
+    'addr.utxos': 'Saídas Não Gastas',
+    'addr.noUtxos': 'Nenhuma saída não gasta encontrada.',
+    'addr.txid': 'Txid',
+    'addr.amount': 'Valor',
+    'addr.height': 'Altura',
+    'addr.scanNote': 'Dados via scantxoutset — mostra apenas saídas não gastas, não o histórico completo.',
 
     // ── Wallets ────────────────────────────────────────────────────
     'wallets.activeWallets': 'Carteiras Ativas',
@@ -784,6 +814,8 @@ const dict: Record<Lang, Record<string, string>> = {
     'wallets.disablePrivateKeys': 'Desativar chaves privadas (somente leitura)',
     'wallets.cancel': 'Cancelar',
     'wallets.creating': 'Criando…',
+    'wallets.betaWarning': 'Funcionalidade de carteira está em beta. Tenha cuidado com fundos reais.',
+    'wallets.generatedAddress': 'Novo endereço gerado',
 
     // ── Transactions ───────────────────────────────────────────────
     'txPage.send': 'Enviar',
@@ -818,6 +850,8 @@ const dict: Record<Lang, Record<string, string>> = {
     'txPage.decoded': 'Decodificado',
     'txPage.inputs': 'Entradas',
     'txPage.outputs': 'Saídas',
+    'txPage.max': 'Max',
+    'txPage.sendingAll': 'A taxa será deduzida do valor',
 
     // ── PSBT ───────────────────────────────────────────────────────
     'psbt.title': 'Fluxo PSBT',

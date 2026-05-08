@@ -144,6 +144,12 @@ export default function WalletsPage() {
   const [confFilter,     setConfFilter]     = useState<ConfFilter>('all');
   const [spendableOnly,  setSpendableOnly]  = useState(false);
 
+  // Collapsible sections
+  const [showAddresses,   setShowAddresses]   = useState(false);
+  const [showCoinControl, setShowCoinControl] = useState(false);
+  const [showHistory,     setShowHistory]     = useState(false);
+  const [newAddress,      setNewAddress]      = useState<string | null>(null);
+
   const notLoaded = available.filter((w) => !loaded.includes(w));
 
   // Filtered UTXOs
@@ -281,7 +287,9 @@ export default function WalletsPage() {
         { address: d.address, label: newAddrForm.label, type: newAddrForm.type, used: false },
         ...prev,
       ]);
-      flash(`Generated: ${d.address}`);
+      setNewAddress(d.address);
+      setShowAddresses(true);
+      flash(t('wallets.generatedAddress'));
     } catch (e: unknown) { setError((e as Error).message); }
     finally { setGeneratingAddr(false); }
   }
@@ -414,6 +422,13 @@ export default function WalletsPage() {
 
   return (
     <div className="space-y-8 max-w-5xl">
+      <div className="flex items-start gap-3 p-4 rounded-xl bg-mim-yellow/10 border border-mim-yellow/30">
+        <span className="text-lg flex-shrink-0">⚠️</span>
+        <p className="text-xs text-mim-yellow font-medium leading-relaxed">
+          {t('wallets.betaWarning')}
+        </p>
+      </div>
+
       {error  && <p className="text-mim-red  text-xs font-mono">{error}</p>}
       {notice && <p className="text-mim-green text-xs font-mono">{notice}</p>}
 
@@ -513,72 +528,102 @@ export default function WalletsPage() {
 
               {/* Addresses */}
               <div>
-                <SectionTitle>{t('wallets.addresses')}</SectionTitle>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <input
-                    type="text"
-                    placeholder={t('wallets.labelOptional')}
-                    value={newAddrForm.label}
-                    onChange={(e) => setNewAddrForm((f) => ({ ...f, label: e.target.value }))}
-                    className="bg-mim-surface border border-mim-border text-mim-text text-sm rounded-lg px-3 py-2 w-44 focus:outline-none focus:border-bitcoin-orange/60"
-                  />
-                  <select
-                    value={newAddrForm.type}
-                    onChange={(e) => setNewAddrForm((f) => ({ ...f, type: e.target.value as NewAddrForm['type'] }))}
-                    className="bg-mim-surface border border-mim-border text-mim-text text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-bitcoin-orange/60"
-                  >
-                    {ADDR_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <button
-                    onClick={handleGenerateAddress}
-                    disabled={generatingAddr}
-                    className="px-4 py-2 rounded-lg bg-bitcoin-orange text-black text-xs font-semibold hover:bg-bitcoin-orange-dark disabled:opacity-50 transition-colors"
-                  >
-                    {generatingAddr ? '…' : t('wallets.newAddress')}
-                  </button>
+                <div
+                  className="flex items-center justify-between cursor-pointer mb-3"
+                  onClick={() => setShowAddresses((v) => !v)}
+                >
+                  <h2 className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">
+                    {t('wallets.addresses')} ({addresses.length})
+                  </h2>
+                  <span className="text-xs text-mim-text-dim">{showAddresses ? '▾' : '▸'}</span>
                 </div>
-                {addresses.length > 0 && (
-                  <div className="bg-mim-surface border border-mim-border rounded-xl overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-mim-border">
-                          {[t('wallets.address'), '', t('wallets.label'), t('wallets.type'), t('wallets.status')].map((h, i) => (
-                            <th key={`${h}-${i}`} className={`px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-mim-text-muted ${i > 2 ? 'text-right' : 'text-left'}`}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {addresses.map((a) => (
-                          <tr key={a.address} className="border-b border-mim-border last:border-0 hover:bg-mim-surface-2 transition-colors">
-                            <td className="px-4 py-2.5 text-hash font-mono text-xs">{formatHash(a.address, 12)}</td>
-                            <td className="py-2.5 w-8"><CopyBtn text={a.address} /></td>
-                            <td className="px-4 py-2.5 text-mim-text-muted text-xs">{a.label || '—'}</td>
-                            <td className="px-4 py-2.5 text-right text-mim-text-dim text-xs">{a.type}</td>
-                            <td className="px-4 py-2.5 text-right">
-                              <span className={`text-[10px] font-semibold ${a.used ? 'text-mim-text-dim' : 'text-mim-green'}`}>
-                                {a.used ? t('wallets.used') : t('wallets.fresh')}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                {showAddresses && (
+                  <>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      <input
+                        type="text"
+                        placeholder={t('wallets.labelOptional')}
+                        value={newAddrForm.label}
+                        onChange={(e) => setNewAddrForm((f) => ({ ...f, label: e.target.value }))}
+                        className="bg-mim-surface border border-mim-border text-mim-text text-sm rounded-lg px-3 py-2 w-44 focus:outline-none focus:border-bitcoin-orange/60"
+                      />
+                      <select
+                        value={newAddrForm.type}
+                        onChange={(e) => setNewAddrForm((f) => ({ ...f, type: e.target.value as NewAddrForm['type'] }))}
+                        className="bg-mim-surface border border-mim-border text-mim-text text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-bitcoin-orange/60"
+                      >
+                        {ADDR_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <button
+                        onClick={handleGenerateAddress}
+                        disabled={generatingAddr}
+                        className="px-4 py-2 rounded-lg bg-bitcoin-orange text-black text-xs font-semibold hover:bg-bitcoin-orange-dark disabled:opacity-50 transition-colors"
+                      >
+                        {generatingAddr ? '…' : t('wallets.newAddress')}
+                      </button>
+                    </div>
+                    {newAddress && (
+                      <div className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-mim-green/10 border border-mim-green/30">
+                        <span className="text-xs text-mim-green font-semibold flex-shrink-0">{t('wallets.generatedAddress')}:</span>
+                        <span className="text-xs font-mono text-mim-text flex-1 break-all">{newAddress}</span>
+                        <CopyBtn text={newAddress} />
+                      </div>
+                    )}
+                    {addresses.length > 0 && (
+                      <div className="bg-mim-surface border border-mim-border rounded-xl overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-mim-border">
+                              {[t('wallets.address'), '', t('wallets.label'), t('wallets.type'), t('wallets.status')].map((h, i) => (
+                                <th key={`${h}-${i}`} className={`px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-mim-text-muted ${i > 2 ? 'text-right' : 'text-left'}`}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {addresses.map((a) => (
+                              <tr key={a.address} className="border-b border-mim-border last:border-0 hover:bg-mim-surface-2 transition-colors">
+                                <td className="px-4 py-2.5 text-hash font-mono text-xs">{formatHash(a.address, 12)}</td>
+                                <td className="py-2.5 w-8"><CopyBtn text={a.address} /></td>
+                                <td className="px-4 py-2.5 text-mim-text-muted text-xs">{a.label || '—'}</td>
+                                <td className="px-4 py-2.5 text-right text-mim-text-dim text-xs">{a.type}</td>
+                                <td className="px-4 py-2.5 text-right">
+                                  <span className={`text-[10px] font-semibold ${a.used ? 'text-mim-text-dim' : 'text-mim-green'}`}>
+                                    {a.used ? t('wallets.used') : t('wallets.fresh')}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    {addresses.length === 0 && <p className="text-xs text-mim-text-dim">{t('wallets.noAddresses')}</p>}
+                  </>
                 )}
-                {addresses.length === 0 && <p className="text-xs text-mim-text-dim">{t('wallets.noAddresses')}</p>}
               </div>
 
               {/* ── Coin Control ─────────────────────────────────────────────── */}
               <div>
                 {/* Header */}
-                <div className="flex items-center justify-between mb-1">
-                  <SectionTitle>{t('wallets.coinControl')}</SectionTitle>
-                  <span className="text-xs text-mim-text-muted font-mono">
-                    {utxos.length} UTXOs · {fmt(totalBtc)}
+                <div
+                  className="flex items-center justify-between mb-1 cursor-pointer"
+                  onClick={() => setShowCoinControl((v) => !v)}
+                >
+                  <h2 className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">
+                    {t('wallets.coinControl')}
+                  </h2>
+                  <span className="flex items-center gap-2">
+                    <span className="text-xs text-mim-text-muted font-mono">
+                      {filteredUtxos.length !== utxos.length
+                        ? `${filteredUtxos.length} / ${utxos.length} UTXOs`
+                        : `${utxos.length} UTXOs`
+                      } · {fmt(totalBtc)}
+                    </span>
+                    <span className="text-xs text-mim-text-dim">{showCoinControl ? '▾' : '▸'}</span>
                   </span>
                 </div>
 
-                {selected.size > 0 && (
+                {showCoinControl && selected.size > 0 && (
                   <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-bitcoin-orange/5 border border-bitcoin-orange/20">
                     <span className="text-xs text-bitcoin-orange font-semibold">
                       {t('wallets.selected')} {selected.size} UTXOs · {fmt(selectedTotal)}
@@ -586,6 +631,7 @@ export default function WalletsPage() {
                   </div>
                 )}
 
+                {showCoinControl && <>
                 {/* Filters */}
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <input
@@ -780,12 +826,21 @@ export default function WalletsPage() {
                     </button>
                   </div>
                 )}
+                </>}
               </div>
 
               {/* History */}
               <div>
-                <SectionTitle>{t('wallets.history')}</SectionTitle>
-                {history.length === 0 ? (
+                <div
+                  className="flex items-center justify-between cursor-pointer mb-3"
+                  onClick={() => setShowHistory((v) => !v)}
+                >
+                  <h2 className="text-[10px] font-bold uppercase tracking-widest text-mim-text-muted">
+                    {t('wallets.history')} ({history.length})
+                  </h2>
+                  <span className="text-xs text-mim-text-dim">{showHistory ? '▾' : '▸'}</span>
+                </div>
+                {showHistory && (history.length === 0 ? (
                   <p className="text-xs text-mim-text-dim">{t('wallets.noTx')}</p>
                 ) : (
                   <div className="bg-mim-surface border border-mim-border rounded-xl overflow-x-auto">
@@ -880,7 +935,7 @@ export default function WalletsPage() {
                       </tbody>
                     </table>
                   </div>
-                )}
+                ))}
               </div>
             </>
           )}

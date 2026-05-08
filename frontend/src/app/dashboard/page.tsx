@@ -464,6 +464,9 @@ export default function DashboardPage() {
         <div>
           <Label>{t('dash.difficulty')}</Label>
           <BigValue>{formatDifficulty(bc?.difficulty ?? 0)}</BigValue>
+          <p className="text-[10px] text-mim-text-dim font-mono mt-0.5">
+            {(bc?.difficulty ?? 0).toLocaleString('en-US', { maximumFractionDigits: 6 })}
+          </p>
         </div>
         <div className="space-y-0">
           <Row label={t('dash.bestHash')}    value={formatHash(bc?.bestblockhash ?? '', 8)} mono />

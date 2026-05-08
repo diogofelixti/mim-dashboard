@@ -424,10 +424,11 @@ export default function SetupPage() {
       <div className="relative z-10 w-full max-w-lg">
         {/* Header */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-3 glow-orange"
-               style={{ background: 'linear-gradient(135deg, #1A1A25 0%, #12121A 100%)', border: '1px solid rgba(247,147,26,0.4)' }}>
-            <span className="text-2xl font-bold text-bitcoin-orange">₿</span>
-          </div>
+          <img
+            src="/logo.png"
+            alt="MIM"
+            className="w-14 h-14 rounded-xl mb-3 glow-orange"
+          />
           <h1 className="text-xl font-semibold text-mim-text">{t('setup.title')}</h1>
         </div>
 
