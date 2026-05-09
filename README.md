@@ -25,9 +25,6 @@
 
 ---
 
-https://github.com/user-attachments/assets/79d9ddfb-4d82-495d-a231-6c7c714b26f2
-
-
 Monitor, manage, and interact with your Bitcoin Core node through a modern web interface. Connects via RPC and ZMQ — no third parties, no external APIs, no cloud. Just you and your node.
 
 > *"Don't trust, verify."*
